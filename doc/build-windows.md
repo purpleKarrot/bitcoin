@@ -74,5 +74,5 @@ cmake --install build --prefix /mnt/c/workspace/bitcoin --strip
 
 You can also create an installer using:
 ```shell
-cmake --build build --target deploy
+cpack -G NSIS64
 ```
