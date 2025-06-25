@@ -28,8 +28,8 @@ else()
   set(WORKING_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
-set(GIT_TAG)
-set(GIT_COMMIT)
+set(BUILD_GIT_TAG)
+set(BUILD_GIT_COMMIT)
 if(NOT "$ENV{BITCOIN_GENBUILD_NO_GIT}" STREQUAL "1")
   find_package(Git QUIET)
   if(Git_FOUND)
@@ -81,33 +81,29 @@ if(NOT "$ENV{BITCOIN_GENBUILD_NO_GIT}" STREQUAL "1")
 
       if(HEAD_COMMIT STREQUAL MOST_RECENT_TAG_COMMIT AND NOT IS_DIRTY)
         # If latest commit is tagged and not dirty, then use the tag name.
-        set(GIT_TAG ${MOST_RECENT_TAG})
+        set(BUILD_GIT_TAG ${MOST_RECENT_TAG})
       else()
         # Otherwise, generate suffix from git, i.e. string like "0e0a5173fae3-dirty".
         execute_process(
           COMMAND ${GIT_EXECUTABLE} rev-parse --short=12 HEAD
           WORKING_DIRECTORY ${WORKING_DIR}
-          OUTPUT_VARIABLE GIT_COMMIT
+          OUTPUT_VARIABLE BUILD_GIT_COMMIT
           OUTPUT_STRIP_TRAILING_WHITESPACE
           ERROR_QUIET
         )
         if(IS_DIRTY)
-          string(APPEND GIT_COMMIT "-dirty")
+          string(APPEND BUILD_GIT_COMMIT "-dirty")
         endif()
       endif()
     endif()
   endif()
 endif()
 
-if(GIT_TAG)
-  set(NEWINFO "#define BUILD_GIT_TAG \"${GIT_TAG}\"")
-elseif(GIT_COMMIT)
-  set(NEWINFO "#define BUILD_GIT_COMMIT \"${GIT_COMMIT}\"")
-else()
-  set(NEWINFO "// No build information available")
-endif()
-
 # Only update the header if necessary.
-if(NOT "${INFO}" STREQUAL "${NEWINFO}")
-  file(WRITE ${BUILD_INFO_HEADER_PATH} "${NEWINFO}\n")
-endif()
+file(CONFIGURE
+  OUTPUT ${BUILD_INFO_HEADER_PATH}
+  CONTENT [[
+#cmakedefine BUILD_GIT_TAG "${BUILD_GIT_TAG}"
+#cmakedefine BUILD_GIT_COMMIT "${BUILD_GIT_COMMIT}"
+]]
+)
