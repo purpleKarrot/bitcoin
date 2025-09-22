@@ -13,6 +13,25 @@ set(CPACK_NSIS_MUI_UNWELCOMEFINISHPAGE_BITMAP "${BitcoinCore_SOURCE_DIR}/share/p
 set(CPACK_RESOURCE_FILE_LICENSE "${BitcoinCore_SOURCE_DIR}/COPYING")
 set(CPACK_STRIP_FILES ON)
 
+set(CPACK_SOURCE_IGNORE_FILES
+  "/\\\\.cache/"
+  "/\\\\.git/"
+  "/depends/SDKs/"
+  "/depends/work/"
+  "/depends/built/"
+  "/depends/sources/"
+  "/depends/x86_64.*"
+  "/depends/amd64.*"
+  "/depends/i686.*"
+  "/depends/mips.*"
+  "/depends/arm.*"
+  "/depends/aarch64.*"
+  "/depends/powerpc.*"
+  "/depends/riscv32.*"
+  "/depends/riscv64.*"
+  "/depends/s390x.*"
+)
+
 include(CPack)
 
 function(setup_split_debug_script)
