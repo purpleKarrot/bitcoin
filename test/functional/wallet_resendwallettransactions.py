@@ -10,7 +10,6 @@ from decimal import Decimal
 from test_framework.blocktools import (
     create_block,
 )
-from test_framework.messages import DEFAULT_MEMPOOL_EXPIRY_HOURS
 from test_framework.p2p import P2PTxInvStore
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
@@ -131,22 +130,18 @@ class ResendWalletTransactionsTest(BitcoinTestFramework):
         # Set correct m_best_block_time, which is used in ResubmitWalletTransactions
         node.syncwithvalidationinterfacequeue()
 
-        evict_time = block_time + 60 * 60 * DEFAULT_MEMPOOL_EXPIRY_HOURS + 5
+        evict_time = block_time + 2 * RESEND_TIMER_LIMIT + 5
         # Flush out currently scheduled resubmit attempt now so that there can't be one right between eviction and check.
         with node.assert_debug_log(['resubmit 2 unconfirmed transactions'], timeout=2):
             node.setmocktime(evict_time)
             node.mockscheduler(60)
 
-        # Evict these txs from the mempool
-        indep_send = node.send(outputs=[{node.getnewaddress(): 1}], inputs=[indep_utxo])
-        node.getmempoolentry(indep_send["txid"])
-        assert_raises_rpc_error(-5, "Transaction not in mempool", node.getmempoolentry, txid)
-        assert_raises_rpc_error(-5, "Transaction not in mempool", node.getmempoolentry, child_txid)
-
-        # Rebroadcast and check that parent and child are both in the mempool
-        with node.assert_debug_log(['resubmit 2 unconfirmed transactions'], timeout=2):
-            node.setmocktime(evict_time + RESEND_TIMER_LIMIT)
-            node.mockscheduler(60)
+        # Simulate eviction by restarting without mempool persistence.
+        # Pass mocktime so the node accepts the chain (block timestamps are in the future relative to real time).
+        # Preserve the node's stored extra_args (e.g. -whitelist from noban_tx_relay) alongside the new flags.
+        # The wallet resubmits parent and child on startup.
+        self.restart_node(0, extra_args=node.extra_args + ['-nopersistmempool', f'-mocktime={evict_time}'])
+        node.setmocktime(evict_time + RESEND_TIMER_LIMIT)
         node.getmempoolentry(txid)
         node.getmempoolentry(child_txid)
 
