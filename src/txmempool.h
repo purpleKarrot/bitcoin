@@ -24,15 +24,8 @@
 #include <util/hasher.h>
 #include <util/result.h>
 
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/identity.hpp>
-#include <boost/multi_index/indexed_by.hpp>
-#include <boost/multi_index/ordered_index.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index/tag.hpp>
-#include <boost/multi_index_container.hpp>
-
 #include <atomic>
+#include <list>
 #include <map>
 #include <optional>
 #include <set>
@@ -62,38 +55,6 @@ static constexpr uint64_t POST_CHANGE_COST = 5 * ACCEPTABLE_COST;
  */
 bool TestLockPointValidity(CChain& active_chain, const LockPoints& lp) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-// extracts a transaction hash from CTxMemPoolEntry or CTransactionRef
-struct mempoolentry_txid
-{
-    typedef Txid result_type;
-    result_type operator() (const CTxMemPoolEntry &entry) const
-    {
-        return entry.GetTx().GetHash();
-    }
-
-    result_type operator() (const CTransactionRef& tx) const
-    {
-        return tx->GetHash();
-    }
-};
-
-// extracts a transaction witness-hash from CTxMemPoolEntry or CTransactionRef
-struct mempoolentry_wtxid
-{
-    typedef Wtxid result_type;
-    result_type operator() (const CTxMemPoolEntry &entry) const
-    {
-        return entry.GetTx().GetWitnessHash();
-    }
-
-    result_type operator() (const CTransactionRef& tx) const
-    {
-        return tx->GetWitnessHash();
-    }
-};
-
-// Multi_index tag names
-struct index_by_wtxid {};
 
 /**
  * Information about a mempool transaction.
@@ -114,6 +75,63 @@ struct TxMempoolInfo
 
     /** The fee delta. */
     int64_t nFeeDelta;
+};
+
+/** Stores mempool entries in a doubly-linked list with two hash-indexed secondary indexes for O(1) lookup by txid and wtxid. */
+class IndexedTransactionSet {
+    using list_type = std::list<CTxMemPoolEntry>;
+    list_type m_list;
+    std::unordered_map<Txid, list_type::const_iterator, SaltedTxidHasher> m_by_txid;
+    std::unordered_map<Wtxid, list_type::const_iterator, SaltedWtxidHasher> m_by_wtxid;
+public:
+    using const_iterator = list_type::const_iterator;
+
+    const_iterator begin() const noexcept { return m_list.begin(); }
+    const_iterator end() const noexcept { return m_list.end(); }
+    size_t size() const noexcept { return m_list.size(); }
+    bool empty() const noexcept { return m_list.empty(); }
+    size_t count(const Txid& txid) const { return m_by_txid.count(txid); }
+    size_t count(const Wtxid& wtxid) const { return m_by_wtxid.count(wtxid); }
+    void clear() { m_list.clear(); m_by_txid.clear(); m_by_wtxid.clear(); }
+
+    const_iterator find(const Txid& txid) const {
+        auto it = m_by_txid.find(txid);
+        return it != m_by_txid.end() ? it->second : m_list.end();
+    }
+    const_iterator find(const Wtxid& wtxid) const {
+        auto it = m_by_wtxid.find(wtxid);
+        return it != m_by_wtxid.end() ? it->second : m_list.end();
+    }
+
+    template<typename... Args>
+    const_iterator emplace(Args&&... args) {
+        m_list.emplace_back(std::forward<Args>(args)...);
+        const_iterator it = std::prev(m_list.end());
+        m_by_txid.emplace(it->GetTx().GetHash(), it);
+        m_by_wtxid.emplace(it->GetTx().GetWitnessHash(), it);
+        return it;
+    }
+
+    const_iterator erase(const_iterator it) {
+        m_by_txid.erase(it->GetTx().GetHash());
+        m_by_wtxid.erase(it->GetTx().GetWitnessHash());
+        return m_list.erase(it);
+    }
+
+    // Move the entry at `it` from `other` into this set.
+    // `it` remains valid and now refers to an element in this set's list.
+    void splice(const_iterator it, IndexedTransactionSet& other) {
+        m_list.splice(m_list.end(), other.m_list, it);
+        // Transfer the secondary index nodes without allocating or freeing.
+        m_by_txid.insert(other.m_by_txid.extract(it->GetTx().GetHash()));
+        m_by_wtxid.insert(other.m_by_wtxid.extract(it->GetTx().GetWitnessHash()));
+    }
+
+    size_t DynamicMemUsage() const {
+        return memusage::DynamicUsage(m_list)
+             + memusage::DynamicUsage(m_by_txid)
+             + memusage::DynamicUsage(m_by_wtxid);
+    }
 };
 
 /**
@@ -200,20 +218,6 @@ public:
 
     static const int ROLLING_FEE_HALFLIFE = 60 * 60 * 12; // public only for testing
 
-    using indexed_transaction_set = boost::multi_index_container<
-        CTxMemPoolEntry,
-        boost::multi_index::indexed_by<
-            // sorted by txid
-            boost::multi_index::hashed_unique<mempoolentry_txid, SaltedTxidHasher>,
-            // sorted by wtxid
-            boost::multi_index::hashed_unique<
-                boost::multi_index::tag<index_by_wtxid>,
-                mempoolentry_wtxid,
-                SaltedWtxidHasher
-            >
-        >
-    >;
-
     /**
      * This mutex needs to be locked when accessing `mapTx` or other members
      * that are guarded by it.
@@ -241,9 +245,9 @@ public:
     mutable RecursiveMutex cs ACQUIRED_AFTER(::cs_main);
     std::unique_ptr<TxGraph> m_txgraph GUARDED_BY(cs);
     mutable std::unique_ptr<TxGraph::BlockBuilder> m_builder GUARDED_BY(cs);
-    indexed_transaction_set mapTx GUARDED_BY(cs);
+    IndexedTransactionSet mapTx GUARDED_BY(cs);
 
-    using txiter = indexed_transaction_set::nth_index<0>::type::const_iterator;
+    using txiter = IndexedTransactionSet::const_iterator;
     std::vector<std::pair<Wtxid, txiter>> txns_randomized GUARDED_BY(cs); //!< All transactions in mapTx with their wtxids, in arbitrary order
 
     typedef std::set<txiter, CompareIteratorByHash> setEntries;
@@ -259,14 +263,14 @@ public:
     std::vector<CTxMemPoolEntry::CTxMemPoolEntryRef> GetParents(const CTxMemPoolEntry &entry) const;
 
 private:
-    std::vector<indexed_transaction_set::const_iterator> GetSortedScoreWithTopology() const EXCLUSIVE_LOCKS_REQUIRED(cs);
+    std::vector<IndexedTransactionSet::const_iterator> GetSortedScoreWithTopology() const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /**
      * Track locally submitted transactions to periodically retry initial broadcast.
      */
     std::set<Txid> m_unbroadcast_txids GUARDED_BY(cs);
 
-    static TxMempoolInfo GetInfo(CTxMemPool::indexed_transaction_set::const_iterator it)
+    static TxMempoolInfo GetInfo(IndexedTransactionSet::const_iterator it)
     {
         return TxMempoolInfo{it->GetSharedTx(), it->GetTime(), it->GetFee(), it->GetTxSize(), it->GetModifiedFee() - it->GetFee()};
     }
@@ -487,7 +491,7 @@ public:
     bool exists(const Wtxid& wtxid) const
     {
         LOCK(cs);
-        return (mapTx.get<index_by_wtxid>().count(wtxid) != 0);
+        return (mapTx.count(wtxid) != 0);
     }
 
     const CTxMemPoolEntry* GetEntry(const Txid& txid) const LIFETIMEBOUND EXCLUSIVE_LOCKS_REQUIRED(cs);
@@ -660,7 +664,7 @@ public:
         void ProcessDependencies();
 
         CTxMemPool* m_pool;
-        CTxMemPool::indexed_transaction_set m_to_add;
+        IndexedTransactionSet m_to_add;
         std::vector<CTxMemPool::txiter> m_entry_vec; // track the added transactions' insertion order
         // map from the m_to_add index to the ancestors for the transaction
         std::map<CTxMemPool::txiter, CTxMemPool::setEntries, CompareIteratorByHash> m_ancestors;
