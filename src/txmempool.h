@@ -78,11 +78,55 @@ struct TxMempoolInfo
 };
 
 /** Stores mempool entries in a doubly-linked list with two hash-indexed secondary indexes for O(1) lookup by txid and wtxid. */
-class IndexedTransactionSet {
+class indexed_transaction_set {
     using list_type = std::list<CTxMemPoolEntry>;
     list_type m_list;
-    std::unordered_map<Txid, list_type::const_iterator, SaltedTxidHasher> m_by_txid;
-    std::unordered_map<Wtxid, list_type::const_iterator, SaltedWtxidHasher> m_by_wtxid;
+
+    struct TxidHash : SaltedTxidHasher {
+        using is_transparent = void;
+        using SaltedTxidHasher::operator();
+        size_t operator()(list_type::const_iterator it) const
+        {
+            return operator()(it->GetTx().GetHash());
+        }
+    };
+
+    struct TxidEqual {
+        using is_transparent = void;
+        bool operator()(const Txid& txid, list_type::const_iterator it) const
+        {
+            return txid == it->GetTx().GetHash();
+        }
+        bool operator()(list_type::const_iterator l, list_type::const_iterator r) const
+        {
+            return l->GetTx().GetHash() == r->GetTx().GetHash();
+        }
+    };
+
+    struct WtxidHash : SaltedWtxidHasher {
+        using is_transparent = void;
+        using SaltedWtxidHasher::operator();
+        size_t operator()(list_type::const_iterator it) const
+        {
+            return operator()(it->GetTx().GetWitnessHash());
+        }
+    };
+
+    struct WtxidEqual {
+        using is_transparent = void;
+        bool operator()(const Wtxid& txid, list_type::const_iterator it) const
+        {
+            return txid == it->GetTx().GetWitnessHash();
+        }
+        bool operator()(list_type::const_iterator l, list_type::const_iterator r) const
+        {
+            return l->GetTx().GetWitnessHash() == r->GetTx().GetWitnessHash();
+        }
+    };
+
+    std::unordered_set<list_type::const_iterator, TxidHash, TxidEqual> m_by_txid;
+    std::unordered_set<list_type::const_iterator, WtxidHash, WtxidEqual> m_by_wtxid;
+
 public:
     using const_iterator = list_type::const_iterator;
 
@@ -96,35 +140,37 @@ public:
 
     const_iterator find(const Txid& txid) const {
         auto it = m_by_txid.find(txid);
-        return it != m_by_txid.end() ? it->second : m_list.end();
+        return it != m_by_txid.end() ? *it : m_list.end();
     }
     const_iterator find(const Wtxid& wtxid) const {
         auto it = m_by_wtxid.find(wtxid);
-        return it != m_by_wtxid.end() ? it->second : m_list.end();
+        return it != m_by_wtxid.end() ? *it : m_list.end();
+    }
+    const_iterator iterator_to(const CTxMemPoolEntry& entry) const {
+        return find(entry.GetTx().GetHash());
     }
 
     template<typename... Args>
     const_iterator emplace(Args&&... args) {
-        m_list.emplace_back(std::forward<Args>(args)...);
-        const_iterator it = std::prev(m_list.end());
-        m_by_txid.emplace(it->GetTx().GetHash(), it);
-        m_by_wtxid.emplace(it->GetTx().GetWitnessHash(), it);
+        auto it = m_list.emplace(m_list.end(), std::forward<Args>(args)...);
+        m_by_txid.emplace(it);
+        m_by_wtxid.emplace(it);
         return it;
     }
 
     const_iterator erase(const_iterator it) {
-        m_by_txid.erase(it->GetTx().GetHash());
-        m_by_wtxid.erase(it->GetTx().GetWitnessHash());
+        m_by_txid.erase(it);
+        m_by_wtxid.erase(it);
         return m_list.erase(it);
     }
 
     // Move the entry at `it` from `other` into this set.
     // `it` remains valid and now refers to an element in this set's list.
-    void splice(const_iterator it, IndexedTransactionSet& other) {
+    void splice(const_iterator it, indexed_transaction_set& other) {
         m_list.splice(m_list.end(), other.m_list, it);
         // Transfer the secondary index nodes without allocating or freeing.
-        m_by_txid.insert(other.m_by_txid.extract(it->GetTx().GetHash()));
-        m_by_wtxid.insert(other.m_by_wtxid.extract(it->GetTx().GetWitnessHash()));
+        m_by_txid.insert(other.m_by_txid.extract(it));
+        m_by_wtxid.insert(other.m_by_wtxid.extract(it));
     }
 
     size_t DynamicMemUsage() const {
@@ -245,9 +291,9 @@ public:
     mutable RecursiveMutex cs ACQUIRED_AFTER(::cs_main);
     std::unique_ptr<TxGraph> m_txgraph GUARDED_BY(cs);
     mutable std::unique_ptr<TxGraph::BlockBuilder> m_builder GUARDED_BY(cs);
-    IndexedTransactionSet mapTx GUARDED_BY(cs);
+    indexed_transaction_set mapTx GUARDED_BY(cs);
 
-    using txiter = IndexedTransactionSet::const_iterator;
+    using txiter = indexed_transaction_set::const_iterator;
     std::vector<std::pair<Wtxid, txiter>> txns_randomized GUARDED_BY(cs); //!< All transactions in mapTx with their wtxids, in arbitrary order
 
     typedef std::set<txiter, CompareIteratorByHash> setEntries;
@@ -263,14 +309,14 @@ public:
     std::vector<CTxMemPoolEntry::CTxMemPoolEntryRef> GetParents(const CTxMemPoolEntry &entry) const;
 
 private:
-    std::vector<IndexedTransactionSet::const_iterator> GetSortedScoreWithTopology() const EXCLUSIVE_LOCKS_REQUIRED(cs);
+    std::vector<indexed_transaction_set::const_iterator> GetSortedScoreWithTopology() const EXCLUSIVE_LOCKS_REQUIRED(cs);
 
     /**
      * Track locally submitted transactions to periodically retry initial broadcast.
      */
     std::set<Txid> m_unbroadcast_txids GUARDED_BY(cs);
 
-    static TxMempoolInfo GetInfo(IndexedTransactionSet::const_iterator it)
+    static TxMempoolInfo GetInfo(indexed_transaction_set::const_iterator it)
     {
         return TxMempoolInfo{it->GetSharedTx(), it->GetTime(), it->GetFee(), it->GetTxSize(), it->GetModifiedFee() - it->GetFee()};
     }
@@ -664,7 +710,7 @@ public:
         void ProcessDependencies();
 
         CTxMemPool* m_pool;
-        IndexedTransactionSet m_to_add;
+        indexed_transaction_set m_to_add;
         std::vector<CTxMemPool::txiter> m_entry_vec; // track the added transactions' insertion order
         // map from the m_to_add index to the ancestors for the transaction
         std::map<CTxMemPool::txiter, CTxMemPool::setEntries, CompareIteratorByHash> m_ancestors;
