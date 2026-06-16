@@ -20,7 +20,6 @@
 #include <memory>
 #include <numeric>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -36,20 +35,16 @@ public:
     COutPoint(): n(NULL_INDEX) { }
     COutPoint(const Txid& hashIn, uint32_t nIn): hash(hashIn), n(nIn) { }
 
+    [[nodiscard]] auto GetTxid() const -> const Txid& { return hash; }
+    [[nodiscard]] auto GetIndex() const -> uint32_t { return n; }
+
     SERIALIZE_METHODS(COutPoint, obj) { READWRITE(obj.hash, obj.n); }
 
     void SetNull() { hash.SetNull(); n = NULL_INDEX; }
     bool IsNull() const { return (hash.IsNull() && n == NULL_INDEX); }
 
-    friend bool operator<(const COutPoint& a, const COutPoint& b)
-    {
-        return std::tie(a.hash, a.n) < std::tie(b.hash, b.n);
-    }
-
-    friend bool operator==(const COutPoint& a, const COutPoint& b)
-    {
-        return (a.hash == b.hash && a.n == b.n);
-    }
+    friend bool operator==(const COutPoint& a, const COutPoint& b) = default;
+    friend auto operator<=>(const COutPoint& a, const COutPoint& b) = default;
 
     std::string ToString() const;
 };
