@@ -44,8 +44,7 @@ void initialize_package_rbf()
     // Create a fixed set of unique "UTXOs" to source parents from
     // to avoid fuzzer giving circular references
     for (int i = 0; i < NUM_ITERS; ++i) {
-        g_outpoints.emplace_back();
-        g_outpoints.back().n = i;
+        g_outpoints.emplace_back(Txid(), i);
     }
 
 }

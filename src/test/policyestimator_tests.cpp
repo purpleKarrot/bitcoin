@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE(BlockPolicyEstimates)
     while (blocknum < 200) {
         for (int j = 0; j < 10; j++) { // For each fee
             for (int k = 0; k < 4; k++) { // add 4 fee txs
-                tx.vin[0].prevout.n = 10000*blocknum+100*j+k; // make transaction unique
+                tx.vin[0].prevout = COutPoint(tx.vin[0].prevout.GetTxid(), 10000*blocknum+100*j+k); // make transaction unique
                 {
                     LOCK2(cs_main, mpool.cs);
                     TryAddToMempool(mpool, entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(BlockPolicyEstimates)
     while (blocknum < 265) {
         for (int j = 0; j < 10; j++) { // For each fee multiple
             for (int k = 0; k < 4; k++) { // add 4 fee txs
-                tx.vin[0].prevout.n = 10000*blocknum+100*j+k;
+                tx.vin[0].prevout = COutPoint(tx.vin[0].prevout.GetTxid(), 10000*blocknum+100*j+k);
                 {
                     LOCK2(cs_main, mpool.cs);
                     TryAddToMempool(mpool, entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
@@ -223,7 +223,7 @@ BOOST_AUTO_TEST_CASE(BlockPolicyEstimates)
     while (blocknum < 665) {
         for (int j = 0; j < 10; j++) { // For each fee multiple
             for (int k = 0; k < 4; k++) { // add 4 fee txs
-                tx.vin[0].prevout.n = 10000*blocknum+100*j+k;
+                tx.vin[0].prevout = COutPoint(tx.vin[0].prevout.GetTxid(), 10000*blocknum+100*j+k);
                 {
                     LOCK2(cs_main, mpool.cs);
                     TryAddToMempool(mpool, entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));

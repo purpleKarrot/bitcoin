@@ -29,7 +29,7 @@ BOOST_FIXTURE_TEST_CASE(txospenderindex_initial_sync, TestChain100Setup)
         // Spending tx
         spender[i].version = 1;
         spender[i].vin.resize(1);
-        spender[i].vin[0].prevout = COutPoint(spent[i].hash, spent[i].n);
+        spender[i].vin[0].prevout = spent[i];
         spender[i].vout.resize(1);
         spender[i].vout[0].nValue = coinbase_tx->GetValueOut();
         spender[i].vout[0].scriptPubKey = coinbase_script;
