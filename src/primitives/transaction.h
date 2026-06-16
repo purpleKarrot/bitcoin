@@ -20,7 +20,6 @@
 #include <memory>
 #include <numeric>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -36,20 +35,16 @@ public:
     COutPoint(): n(NULL_INDEX) { }
     COutPoint(const Txid& hashIn, uint32_t nIn): hash(hashIn), n(nIn) { }
 
+    [[nodiscard]] auto GetTxid() const -> const Txid& { return hash; }
+    [[nodiscard]] auto GetIndex() const -> uint32_t { return n; }
+
     SERIALIZE_METHODS(COutPoint, obj) { READWRITE(obj.hash, obj.n); }
 
     void SetNull() { hash.SetNull(); n = NULL_INDEX; }
     bool IsNull() const { return (hash.IsNull() && n == NULL_INDEX); }
 
-    friend bool operator<(const COutPoint& a, const COutPoint& b)
-    {
-        return std::tie(a.hash, a.n) < std::tie(b.hash, b.n);
-    }
-
-    friend bool operator==(const COutPoint& a, const COutPoint& b)
-    {
-        return (a.hash == b.hash && a.n == b.n);
-    }
+    friend bool operator==(const COutPoint& a, const COutPoint& b) = default;
+    friend auto operator<=>(const COutPoint& a, const COutPoint& b) = default;
 
     std::string ToString() const;
 };
@@ -121,6 +116,11 @@ public:
     explicit CTxIn(COutPoint prevoutIn, CScript scriptSigIn=CScript(), uint32_t nSequenceIn=SEQUENCE_FINAL);
     CTxIn(Txid hashPrevTx, uint32_t nOut, CScript scriptSigIn=CScript(), uint32_t nSequenceIn=SEQUENCE_FINAL);
 
+    [[nodiscard]] auto GetPrevout() const -> const COutPoint& { return prevout; }
+    [[nodiscard]] auto GetScript() const -> const CScript& { return scriptSig; }
+    [[nodiscard]] auto GetSequence() const -> uint32_t { return nSequence; }
+    [[nodiscard]] auto GetWitness() const -> const CScriptWitness& { return scriptWitness; }
+
     SERIALIZE_METHODS(CTxIn, obj) { READWRITE(obj.prevout, obj.scriptSig, obj.nSequence); }
 
     friend bool operator==(const CTxIn& a, const CTxIn& b)
@@ -149,6 +149,9 @@ public:
 
     CTxOut(const CAmount& nValueIn, CScript scriptPubKeyIn);
 
+    [[nodiscard]] auto GetAmount() const -> CAmount { return nValue; }
+    [[nodiscard]] auto GetScript() const -> const CScript& { return scriptPubKey; }
+
     SERIALIZE_METHODS(CTxOut, obj) { READWRITE(obj.nValue, obj.scriptPubKey); }
 
     void SetNull()
@@ -162,11 +165,7 @@ public:
         return (nValue == -1);
     }
 
-    friend bool operator==(const CTxOut& a, const CTxOut& b)
-    {
-        return (a.nValue       == b.nValue &&
-                a.scriptPubKey == b.scriptPubKey);
-    }
+    friend bool operator==(const CTxOut& a, const CTxOut& b) = default;
 
     std::string ToString() const;
 };
@@ -309,6 +308,11 @@ public:
     explicit CTransaction(const CMutableTransaction& tx);
     explicit CTransaction(CMutableTransaction&& tx);
 
+    [[nodiscard]] auto GetVersion() const -> uint32_t { return version; }
+    [[nodiscard]] auto GetInputs() const -> const std::vector<CTxIn>& { return vin; }
+    [[nodiscard]] auto GetOutputs() const -> const std::vector<CTxOut>& { return vout; }
+    [[nodiscard]] auto GetLockTime() const -> uint32_t { return nLockTime; }
+
     template <typename Stream>
     inline void Serialize(Stream& s) const {
         SerializeTransaction(*this, s, s.template GetParams<TransactionSerParams>());
@@ -363,6 +367,11 @@ struct CMutableTransaction
 
     explicit CMutableTransaction();
     explicit CMutableTransaction(const CTransaction& tx);
+
+    [[nodiscard]] auto GetVersion() const -> uint32_t { return version; }
+    [[nodiscard]] auto GetInputs() const -> const std::vector<CTxIn>& { return vin; }
+    [[nodiscard]] auto GetOutputs() const -> const std::vector<CTxOut>& { return vout; }
+    [[nodiscard]] auto GetLockTime() const -> uint32_t { return nLockTime; }
 
     template <typename Stream>
     inline void Serialize(Stream& s) const {

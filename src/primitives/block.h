@@ -92,6 +92,9 @@ public:
         *(static_cast<CBlockHeader*>(this)) = header;
     }
 
+    [[nodiscard]] auto GetHeader() const -> const CBlockHeader& { return *this; }
+    [[nodiscard]] auto GetTransactions() const -> std::span<const CTransactionRef> { return vtx; }
+
     SERIALIZE_METHODS(CBlock, obj)
     {
         READWRITE(AsBase<CBlockHeader>(obj), obj.vtx);

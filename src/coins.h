@@ -56,9 +56,9 @@ public:
     //! empty constructor
     Coin() : fCoinBase(false), nHeight(0) { }
 
-    bool IsCoinBase() const {
-        return fCoinBase;
-    }
+    [[nodiscard]] auto GetOutput() const -> const CTxOut& { return out; }
+    [[nodiscard]] auto GetHeight() const -> uint32_t { return nHeight; }
+    [[nodiscard]] auto IsCoinBase() const -> bool { return fCoinBase; }
 
     template<typename Stream>
     void Serialize(Stream &s) const {
