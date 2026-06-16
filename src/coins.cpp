@@ -366,11 +366,9 @@ static const uint64_t MAX_OUTPUTS_PER_BLOCK{MAX_BLOCK_WEIGHT / MIN_TRANSACTION_O
 
 const Coin& AccessByTxid(const CCoinsViewCache& view, const Txid& txid)
 {
-    COutPoint iter(txid, 0);
-    while (iter.GetIndex() < MAX_OUTPUTS_PER_BLOCK) {
-        const Coin& alternate = view.AccessCoin(iter);
+    for (std::uint32_t idx = 0; idx < MAX_OUTPUTS_PER_BLOCK; ++idx) {
+        const Coin& alternate = view.AccessCoin(COutPoint(txid, idx));
         if (!alternate.IsSpent()) return alternate;
-        ++iter.n;
     }
     return coinEmpty;
 }
