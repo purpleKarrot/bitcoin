@@ -309,6 +309,11 @@ public:
     explicit CTransaction(const CMutableTransaction& tx);
     explicit CTransaction(CMutableTransaction&& tx);
 
+    [[nodiscard]] auto GetVersion() const -> uint32_t { return version; }
+    [[nodiscard]] auto GetInputs() const -> const std::vector<CTxIn>& { return vin; }
+    [[nodiscard]] auto GetOutputs() const -> const std::vector<CTxOut>& { return vout; }
+    [[nodiscard]] auto GetLockTime() const -> uint32_t { return nLockTime; }
+
     template <typename Stream>
     inline void Serialize(Stream& s) const {
         SerializeTransaction(*this, s, s.template GetParams<TransactionSerParams>());
@@ -363,6 +368,11 @@ struct CMutableTransaction
 
     explicit CMutableTransaction();
     explicit CMutableTransaction(const CTransaction& tx);
+
+    [[nodiscard]] auto GetVersion() const -> uint32_t { return version; }
+    [[nodiscard]] auto GetInputs() const -> const std::vector<CTxIn>& { return vin; }
+    [[nodiscard]] auto GetOutputs() const -> const std::vector<CTxOut>& { return vout; }
+    [[nodiscard]] auto GetLockTime() const -> uint32_t { return nLockTime; }
 
     template <typename Stream>
     inline void Serialize(Stream& s) const {
