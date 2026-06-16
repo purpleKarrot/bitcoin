@@ -281,12 +281,12 @@ bool WalletBatch::WriteDescriptorCacheItems(const uint256& desc_id, const Descri
 
 bool WalletBatch::WriteLockedUTXO(const COutPoint& output)
 {
-    return WriteIC(std::make_pair(DBKeys::LOCKED_UTXO, std::make_pair(output.hash, output.n)), uint8_t{'1'});
+    return WriteIC(std::make_pair(DBKeys::LOCKED_UTXO, std::make_pair(output.txid(), output.index())), uint8_t{'1'});
 }
 
 bool WalletBatch::EraseLockedUTXO(const COutPoint& output)
 {
-    return EraseIC(std::make_pair(DBKeys::LOCKED_UTXO, std::make_pair(output.hash, output.n)));
+    return EraseIC(std::make_pair(DBKeys::LOCKED_UTXO, std::make_pair(output.txid(), output.index())));
 }
 
 bool LoadKey(CWallet* pwallet, DataStream& ssKey, DataStream& ssValue, std::string& strErr)

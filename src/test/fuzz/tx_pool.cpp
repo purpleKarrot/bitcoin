@@ -345,7 +345,7 @@ FUZZ_TARGET(tx_pool_standard, .init = initialize_tx_pool)
         if (fuzzed_data_provider.ConsumeBool()) {
             const auto& txid = fuzzed_data_provider.ConsumeBool() ?
                                    tx->GetHash() :
-                                   PickValue(fuzzed_data_provider, outpoints_rbf).hash;
+                                   PickValue(fuzzed_data_provider, outpoints_rbf).txid();
             const auto delta = fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(-50 * COIN, +50 * COIN);
             tx_pool.PrioritiseTransaction(txid, delta);
         }
@@ -438,11 +438,11 @@ FUZZ_TARGET(tx_pool, .init = initialize_tx_pool)
     std::vector<Txid> txids;
     txids.reserve(g_outpoints_coinbase_init_mature.size());
     for (const auto& outpoint : g_outpoints_coinbase_init_mature) {
-        txids.push_back(outpoint.hash);
+        txids.push_back(outpoint.txid());
     }
     for (int i{0}; i <= 3; ++i) {
         // Add some immature and non-existent outpoints
-        txids.push_back(g_outpoints_coinbase_init_immature.at(i).hash);
+        txids.push_back(g_outpoints_coinbase_init_immature.at(i).txid());
         txids.push_back(Txid::FromUint256(ConsumeUInt256(fuzzed_data_provider)));
     }
 

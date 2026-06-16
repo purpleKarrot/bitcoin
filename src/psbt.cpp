@@ -23,7 +23,7 @@ PartiallySignedTransaction::PartiallySignedTransaction(const CMutableTransaction
     fallback_locktime = tx.nLockTime;
     inputs.reserve(tx.vin.size());
     for (const CTxIn& input : tx.vin) {
-        inputs.emplace_back(GetVersion(), input.prevout.hash, input.prevout.n, input.nSequence);
+        inputs.emplace_back(GetVersion(), input.prevout.txid(), input.prevout.index(), input.nSequence);
     }
     outputs.reserve(tx.vout.size());
     for (const CTxOut& output : tx.vout) {
@@ -563,13 +563,13 @@ bool PSBTInputSignedAndVerified(const PartiallySignedTransaction& psbt, unsigned
     if (input.non_witness_utxo) {
         // If we're taking our information from a non-witness UTXO, verify that it matches the prevout.
         COutPoint prevout = input.GetOutPoint();
-        if (prevout.n >= input.non_witness_utxo->vout.size()) {
+        if (prevout.index() >= input.non_witness_utxo->vout.size()) {
             return false;
         }
-        if (input.non_witness_utxo->GetHash() != prevout.hash) {
+        if (input.non_witness_utxo->GetHash() != prevout.txid()) {
             return false;
         }
-        utxo = input.non_witness_utxo->vout[prevout.n];
+        utxo = input.non_witness_utxo->vout[prevout.index()];
     } else if (!input.witness_utxo.IsNull()) {
         utxo = input.witness_utxo;
     } else {
@@ -668,13 +668,13 @@ PSBTError SignPSBTInput(const SigningProvider& provider, PartiallySignedTransact
     if (input.non_witness_utxo) {
         // If we're taking our information from a non-witness UTXO, verify that it matches the prevout.
         COutPoint prevout = input.GetOutPoint();
-        if (prevout.n >= input.non_witness_utxo->vout.size()) {
+        if (prevout.index() >= input.non_witness_utxo->vout.size()) {
             return PSBTError::MISSING_INPUTS;
         }
-        if (input.non_witness_utxo->GetHash() != prevout.hash) {
+        if (input.non_witness_utxo->GetHash() != prevout.txid()) {
             return PSBTError::MISSING_INPUTS;
         }
-        utxo = input.non_witness_utxo->vout[prevout.n];
+        utxo = input.non_witness_utxo->vout[prevout.index()];
     } else if (!input.witness_utxo.IsNull()) {
         utxo = input.witness_utxo;
         // When we're taking our information from a witness UTXO, we can't verify it is actually data from

@@ -369,7 +369,7 @@ void Chainstate::MaybeUpdateMempoolForReorg(
         // If the transaction spends any coinbase outputs, it must be mature.
         if (it->GetSpendsCoinbase()) {
             for (const CTxIn& txin : tx.vin) {
-                if (m_mempool->exists(txin.prevout.hash)) continue;
+                if (m_mempool->exists(txin.prevout.txid())) continue;
                 const Coin& coin{CoinsTip().AccessCoin(txin.prevout)};
                 assert(!coin.IsSpent());
                 const auto mempool_spend_height{m_chain.Tip()->nHeight + 1};
@@ -415,11 +415,11 @@ static bool CheckInputsFromMempoolAndCache(const CTransaction& tx, TxValidationS
         // it is available in our current ChainstateActive UTXO set,
         // or it's a UTXO provided by a transaction in our mempool.
         // Ensure the scriptPubKeys in Coins from CoinsView are correct.
-        const CTransactionRef& txFrom = pool.get(txin.prevout.hash);
+        const CTransactionRef& txFrom = pool.get(txin.prevout.txid());
         if (txFrom) {
-            assert(txFrom->GetHash() == txin.prevout.hash);
-            assert(txFrom->vout.size() > txin.prevout.n);
-            assert(txFrom->vout[txin.prevout.n] == coin.out);
+            assert(txFrom->GetHash() == txin.prevout.txid());
+            assert(txFrom->vout.size() > txin.prevout.index());
+            assert(txFrom->vout[txin.prevout.index()] == coin.out);
         } else {
             const Coin& coinFromUTXOSet = coins_tip.AccessCoin(txin.prevout);
             assert(!coinFromUTXOSet.IsSpent());
@@ -2017,7 +2017,7 @@ std::optional<std::pair<ScriptError, std::string>> CScriptCheck::operator()() {
     if (VerifyScript(scriptSig, m_tx_out.scriptPubKey, witness, m_flags, CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *m_signature_cache, *txdata), &error)) {
         return std::nullopt;
     } else {
-        auto debug_str = strprintf("input %i of %s (wtxid %s), spending %s:%i", nIn, ptxTo->GetHash().ToString(), ptxTo->GetWitnessHash().ToString(), ptxTo->vin[nIn].prevout.hash.ToString(), ptxTo->vin[nIn].prevout.n);
+        auto debug_str = strprintf("input %i of %s (wtxid %s), spending %s:%i", nIn, ptxTo->GetHash().ToString(), ptxTo->GetWitnessHash().ToString(), ptxTo->vin[nIn].prevout.txid().ToString(), ptxTo->vin[nIn].prevout.index());
         return std::make_pair(error, std::move(debug_str));
     }
 }
@@ -2155,7 +2155,7 @@ int ApplyTxInUndo(Coin&& undo, CCoinsViewCache& view, const COutPoint& out)
         // Missing undo metadata (height and coinbase). Older versions included this
         // information only in undo records for the last spend of a transactions'
         // outputs. This implies that it must be present for some other output of the same tx.
-        const Coin& alternate = AccessByTxid(view, out.hash);
+        const Coin& alternate = AccessByTxid(view, out.txid());
         if (!alternate.IsSpent()) {
             undo.nHeight = alternate.nHeight;
             undo.fCoinBase = alternate.fCoinBase;
@@ -5805,7 +5805,7 @@ util::Result<void> ChainstateManager::PopulateAndValidateSnapshot(
                 outpoint.hash = txid;
                 coins_file >> coin;
                 if (coin.nHeight > base_height ||
-                    outpoint.n >= std::numeric_limits<decltype(outpoint.n)>::max() // Avoid integer wrap-around in coinstats.cpp:ApplyHash
+                    outpoint.index() >= std::numeric_limits<decltype(outpoint.index())>::max() // Avoid integer wrap-around in coinstats.cpp:ApplyHash
                 ) {
                     return util::Error{Untranslated(strprintf("Bad snapshot data after deserializing %d coins",
                               coins_count - coins_left))};

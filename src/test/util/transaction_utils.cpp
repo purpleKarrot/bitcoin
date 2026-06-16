@@ -106,8 +106,8 @@ bool SignSignature(const SigningProvider &provider, const CTransaction& txFrom, 
 {
     assert(nIn < txTo.vin.size());
     const CTxIn& txin = txTo.vin[nIn];
-    assert(txin.prevout.n < txFrom.vout.size());
-    const CTxOut& txout = txFrom.vout[txin.prevout.n];
+    assert(txin.prevout.index() < txFrom.vout.size());
+    const CTxOut& txout = txFrom.vout[txin.prevout.index()];
 
     return SignSignature(provider, txout.scriptPubKey, txTo, nIn, txout.nValue, nHashType, sig_data);
 }

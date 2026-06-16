@@ -26,7 +26,7 @@ bool IsTopoSortedPackage(const Package& txns, std::unordered_set<Txid, SaltedTxi
     // than its child.
     for (const auto& tx : txns) {
         for (const auto& input : tx->vin) {
-            if (later_txids.contains(input.prevout.hash)) {
+            if (later_txids.contains(input.prevout.txid())) {
                 // The parent is a subsequent transaction in the package.
                 return false;
             }
@@ -126,7 +126,7 @@ bool IsChildWithParents(const Package& package)
     std::unordered_set<Txid, SaltedTxidHasher> input_txids;
     std::transform(child->vin.cbegin(), child->vin.cend(),
                    std::inserter(input_txids, input_txids.end()),
-                   [](const auto& input) { return input.prevout.hash; });
+                   [](const auto& input) { return input.prevout.txid(); });
 
     // Every transaction must be a parent of the last transaction in the package.
     return std::all_of(package.cbegin(), package.cend() - 1,
@@ -142,7 +142,7 @@ bool IsChildWithParentsTree(const Package& package)
     // Each parent must not have an input who is one of the other parents.
     return std::all_of(package.cbegin(), package.cend() - 1, [&](const auto& ptx) {
         for (const auto& input : ptx->vin) {
-            if (parent_txids.contains(input.prevout.hash)) return false;
+            if (parent_txids.contains(input.prevout.txid())) return false;
         }
         return true;
     });

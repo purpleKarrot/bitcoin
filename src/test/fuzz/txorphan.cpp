@@ -98,7 +98,7 @@ FUZZ_TARGET(txorphan, .init = initialize_orphanage)
             NodeId peer_id = fuzzed_data_provider.ConsumeIntegral<NodeId>();
             for (const auto& child : orphanage->GetChildrenFromSamePeer(ptx_potential_parent, peer_id)) {
                 assert(std::any_of(child->vin.cbegin(), child->vin.cend(), [&](const auto& input) {
-                    return input.prevout.hash == ptx_potential_parent->GetHash();
+                    return input.prevout.txid() == ptx_potential_parent->GetHash();
                 }));
             }
         }
@@ -638,7 +638,7 @@ FUZZ_TARGET(txorphanage_sim)
                     if (have_reconsiderable_fn(child_tx)) continue;
                     bool child_of = false;
                     for (auto& txin : txn[child_tx]->vin) {
-                        if (txin.prevout.hash == txn[tx]->GetHash()) {
+                        if (txin.prevout.txid() == txn[tx]->GetHash()) {
                             child_of = true;
                             break;
                         }
@@ -789,7 +789,7 @@ FUZZ_TARGET(txorphanage_sim)
                     if (ann.reconsider != (phase == 1)) continue;
                     bool matching_parent{false};
                     for (const auto& vin : txn[ann.tx]->vin) {
-                        if (vin.prevout.hash == txn[tx]->GetHash()) matching_parent = true;
+                        if (vin.prevout.txid() == txn[tx]->GetHash()) matching_parent = true;
                     }
                     if (!matching_parent) continue;
                     // Found an announcement from peer which is a child of txn[tx].

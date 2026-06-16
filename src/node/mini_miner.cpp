@@ -28,7 +28,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
     // Anything that's spent by the mempool is to-be-replaced
     // Anything otherwise unavailable just has a bump fee of 0
     for (const auto& outpoint : outpoints) {
-        if (!mempool.exists(outpoint.hash)) {
+        if (!mempool.exists(outpoint.txid())) {
             // This UTXO is either confirmed or not yet submitted to mempool.
             // If it's confirmed, no bump fee is required.
             // If it's not yet submitted, we have no information, so return 0.
@@ -38,7 +38,7 @@ MiniMiner::MiniMiner(const CTxMemPool& mempool, const std::vector<COutPoint>& ou
 
         // UXTO is created by transaction in mempool, add to map.
         // Note: This will either create a missing entry or add the outpoint to an existing entry
-        m_requested_outpoints_by_txid[outpoint.hash].push_back(outpoint);
+        m_requested_outpoints_by_txid[outpoint.txid()].push_back(outpoint);
 
         if (const auto ptx{mempool.GetConflictTx(outpoint)}) {
             // This outpoint is already being spent by another transaction in the mempool. We
@@ -271,7 +271,7 @@ void MiniMiner::BuildMockTemplate(std::optional<CFeeRate> target_feerate)
                 Assume(iter != to_process.end());
                 ancestors.insert(*iter);
                 for (const auto& input : (*iter)->second.GetTx().vin) {
-                    if (auto parent_it{m_entries_by_txid.find(input.prevout.hash)}; parent_it != m_entries_by_txid.end()) {
+                    if (auto parent_it{m_entries_by_txid.find(input.prevout.txid())}; parent_it != m_entries_by_txid.end()) {
                         if (!ancestors.contains(parent_it)) {
                             to_process.insert(parent_it);
                         }
@@ -410,8 +410,8 @@ std::optional<CAmount> MiniMiner::CalculateTotalBumpFees(const CFeeRate& target_
         auto iter = to_process.begin();
         const CTransaction& tx = (*iter)->second.GetTx();
         for (const auto& input : tx.vin) {
-            if (auto parent_it{m_entries_by_txid.find(input.prevout.hash)}; parent_it != m_entries_by_txid.end()) {
-                if (!has_been_processed.contains(input.prevout.hash)) {
+            if (auto parent_it{m_entries_by_txid.find(input.prevout.txid())}; parent_it != m_entries_by_txid.end()) {
+                if (!has_been_processed.contains(input.prevout.txid())) {
                     to_process.insert(parent_it);
                 }
                 ancestors.insert(parent_it);

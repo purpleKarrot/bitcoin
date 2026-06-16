@@ -78,7 +78,7 @@ interfaces::Chain::NotifyOptions TxoSpenderIndex::CustomOptions()
 
 static uint64_t CreateKeyPrefix(std::pair<uint64_t, uint64_t> siphash_key, const COutPoint& vout)
 {
-    return PresaltedSipHasher(siphash_key.first, siphash_key.second)(vout.hash.ToUint256(), vout.n);
+    return PresaltedSipHasher(siphash_key.first, siphash_key.second)(vout.txid().ToUint256(), vout.index());
 }
 
 static DBKey CreateKey(std::pair<uint64_t, uint64_t> siphash_key, const COutPoint& vout, const CDiskTxPos& pos)
@@ -174,7 +174,7 @@ util::Expected<std::optional<TxoSpender>, std::string> TxoSpenderIndex::FindSpen
             }
         } else {
             LogError("Deserialize or I/O error - %s", spender.error());
-            return util::Unexpected{strprintf("IO error finding spending tx for outpoint %s:%d.", txo.hash.GetHex(), txo.n)};
+            return util::Unexpected{strprintf("IO error finding spending tx for outpoint %s:%d.", txo.txid().GetHex(), txo.index())};
         }
     }
     return util::Expected<std::optional<TxoSpender>, std::string>(std::nullopt);

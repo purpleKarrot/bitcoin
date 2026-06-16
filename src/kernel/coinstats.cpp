@@ -127,13 +127,13 @@ static std::optional<CCoinsStats> ComputeUTXOStats(T hash_obj, CCoinsView* view,
         COutPoint key;
         Coin coin;
         if (pcursor->GetKey(key) && pcursor->GetValue(coin)) {
-            if (!outputs.empty() && key.hash != prevkey) {
+            if (!outputs.empty() && key.txid() != prevkey) {
                 ApplyStats(stats, outputs);
                 ApplyHash(hash_obj, prevkey, outputs);
                 outputs.clear();
             }
-            prevkey = key.hash;
-            outputs[key.n] = std::move(coin);
+            prevkey = key.txid();
+            outputs[key.index()] = std::move(coin);
             stats.coins_count++;
         } else {
             LogError("%s: unable to read value\n", __func__);

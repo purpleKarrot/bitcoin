@@ -551,8 +551,8 @@ static void entryToJSON(const CTxMemPool& pool, UniValue& info, const CTxMemPool
     std::set<std::string> setDepends;
     for (const CTxIn& txin : tx.vin)
     {
-        if (pool.exists(txin.prevout.hash))
-            setDepends.insert(txin.prevout.hash.ToString());
+        if (pool.exists(txin.prevout.txid()))
+            setDepends.insert(txin.prevout.txid().ToString());
     }
 
     UniValue depends(UniValue::VARR);
