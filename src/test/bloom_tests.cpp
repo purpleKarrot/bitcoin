@@ -149,7 +149,8 @@ BOOST_AUTO_TEST_CASE(bloom_match)
     {
         std::vector<unsigned char> data(32 + sizeof(unsigned int));
         memcpy(data.data(), prevOutPoint.txid().begin(), 32);
-        memcpy(data.data()+32, &prevOutPoint.n, sizeof(unsigned int));
+        const std::uint32_t index = prevOutPoint.index();
+        memcpy(data.data()+32, &index, sizeof(unsigned int));
         filter.insert(data);
     }
     BOOST_CHECK_MESSAGE(filter.IsRelevantAndUpdate(tx), "Simple Bloom filter didn't match manually serialized COutPoint");

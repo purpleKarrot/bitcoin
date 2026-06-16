@@ -101,8 +101,8 @@ void CCoinsViewCache::AddCoin(const COutPoint &outpoint, Coin&& coin, bool possi
     if (fresh) CCoinsCacheEntry::SetFresh(*it, m_sentinel);
     cachedCoinsUsage += it->second.coin.DynamicMemoryUsage();
     TRACEPOINT(utxocache, add,
-           outpoint.hash.data(),
-           (uint32_t)outpoint.n,
+           outpoint.txid().data(),
+           (uint32_t)outpoint.index(),
            (uint32_t)it->second.coin.nHeight,
            (int64_t)it->second.coin.out.nValue,
            (bool)it->second.coin.IsCoinBase());
@@ -135,8 +135,8 @@ bool CCoinsViewCache::SpendCoin(const COutPoint &outpoint, Coin* moveout) {
     Assume(TrySub(m_dirty_count, it->second.IsDirty()));
     Assume(TrySub(cachedCoinsUsage, it->second.coin.DynamicMemoryUsage()));
     TRACEPOINT(utxocache, spent,
-           outpoint.hash.data(),
-           (uint32_t)outpoint.n,
+           outpoint.txid().data(),
+           (uint32_t)outpoint.index(),
            (uint32_t)it->second.coin.nHeight,
            (int64_t)it->second.coin.out.nValue,
            (bool)it->second.coin.IsCoinBase());
@@ -366,11 +366,9 @@ static const uint64_t MAX_OUTPUTS_PER_BLOCK{MAX_BLOCK_WEIGHT / MIN_TRANSACTION_O
 
 const Coin& AccessByTxid(const CCoinsViewCache& view, const Txid& txid)
 {
-    COutPoint iter(txid, 0);
-    while (iter.index() < MAX_OUTPUTS_PER_BLOCK) {
-        const Coin& alternate = view.AccessCoin(iter);
+    for (std::uint32_t idx = 0; idx < MAX_OUTPUTS_PER_BLOCK; ++idx) {
+        const Coin& alternate = view.AccessCoin(COutPoint(txid, idx));
         if (!alternate.IsSpent()) return alternate;
-        ++iter.n;
     }
     return coinEmpty;
 }

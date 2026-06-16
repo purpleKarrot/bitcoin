@@ -188,7 +188,7 @@ BOOST_FIXTURE_TEST_CASE(rbf_conflicts_calculator, TestChain100Setup)
         for (auto i = 0; i < NUM_OUTPUTS; ++i) {
             auto pretx = make_tx(/*inputs=*/ {parent_tx}, /*output_values=*/ {995 * CENT});
             CMutableTransaction tx(*pretx);
-            tx.vin[0].prevout.n = i;
+            tx.vin[0].prevout = COutPoint(tx.vin[0].prevout.txid(), i);
             TryAddToMempool(pool, entry.Fee(normal_fee).FromTx(tx));
             BOOST_CHECK(pool.GetIter(tx.GetHash()).has_value());
             direct_children.push_back(MakeTransactionRef(tx));

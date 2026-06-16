@@ -1074,10 +1074,8 @@ BOOST_AUTO_TEST_CASE(coins_resource_is_used)
         // The resource has preallocated a chunk, so we should have space for at several nodes without the need to allocate anything else.
         const auto usage_before = memusage::DynamicUsage(map);
 
-        COutPoint out_point{};
         for (size_t i = 0; i < 1000; ++i) {
-            out_point.n = i;
-            map[out_point];
+            map[COutPoint(Txid(), i)];
         }
         BOOST_TEST(usage_before == memusage::DynamicUsage(map));
     }
