@@ -21,7 +21,7 @@ std::vector<size_t> FindInPackageParents(const Package& package, const CTransact
 
     std::set<Txid> possible_parents;
     for (auto &input : ptx->vin) {
-        possible_parents.insert(input.prevout.hash);
+        possible_parents.insert(input.prevout.GetTxid());
     }
 
     for (size_t i{0}; i < package.size(); ++i) {
@@ -127,14 +127,14 @@ std::optional<std::string> PackageTRUCChecks(const CTxMemPool& pool, const CTran
                     // Fail if we find another tx with the same parent. We don't check whether the
                     // sibling is to-be-replaced (done in SingleTRUCChecks) because these transactions
                     // are within the same package.
-                    if (input.prevout.hash == parent_info.m_txid) {
+                    if (input.prevout.GetTxid() == parent_info.m_txid) {
                         return strprintf("tx %s (wtxid=%s) would exceed descendant count limit",
                                          parent_info.m_txid.ToString(),
                                          parent_info.m_wtxid.ToString());
                     }
 
                     // This tx can't have both a parent and an in-package child.
-                    if (input.prevout.hash == ptx->GetHash()) {
+                    if (input.prevout.GetTxid() == ptx->GetHash()) {
                         return strprintf("tx %s (wtxid=%s) would have too many ancestors",
                                          package_tx->GetHash().ToString(), package_tx->GetWitnessHash().ToString());
                     }

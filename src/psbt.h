@@ -1567,7 +1567,7 @@ public:
         unsigned int i = 0;
         while (!s.empty() && i < input_count) {
             if (psbt_ver < 2) {
-                inputs.emplace_back(psbt_ver, tx->vin[i].prevout.hash, tx->vin[i].prevout.n, tx->vin[i].nSequence);
+                inputs.emplace_back(psbt_ver, tx->vin[i].prevout.GetTxid(), tx->vin[i].prevout.GetIndex(), tx->vin[i].nSequence);
                 s >> inputs.back();
             } else {
                 inputs.emplace_back(deserialize, s, psbt_ver);
@@ -1577,10 +1577,10 @@ public:
             const PSBTInput& input = inputs.back();
             if (input.non_witness_utxo) {
                 if (psbt_ver < 2) {
-                    if (input.non_witness_utxo->GetHash() != tx->vin[i].prevout.hash) {
+                    if (input.non_witness_utxo->GetHash() != tx->vin[i].prevout.GetTxid()) {
                         throw std::ios_base::failure("Non-witness UTXO does not match outpoint hash");
                     }
-                    if (tx->vin[i].prevout.n >= input.non_witness_utxo->vout.size()) {
+                    if (tx->vin[i].prevout.GetIndex() >= input.non_witness_utxo->vout.size()) {
                         throw std::ios_base::failure("Input specifies output index that does not exist");
                     }
                 } else {

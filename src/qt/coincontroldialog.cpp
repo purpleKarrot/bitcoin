@@ -641,10 +641,10 @@ void CoinControlDialog::updateView()
             itemOutput->setData(COLUMN_CONFIRMATIONS, Qt::UserRole, QVariant((qlonglong)out.depth_in_main_chain));
 
             // transaction hash
-            itemOutput->setData(COLUMN_ADDRESS, TxHashRole, QString::fromStdString(output.hash.GetHex()));
+            itemOutput->setData(COLUMN_ADDRESS, TxHashRole, QString::fromStdString(output.GetTxid().GetHex()));
 
             // vout index
-            itemOutput->setData(COLUMN_ADDRESS, VOutRole, output.n);
+            itemOutput->setData(COLUMN_ADDRESS, VOutRole, output.GetIndex());
 
              // disable locked coins
             if (model->wallet().isLockedCoin(output))

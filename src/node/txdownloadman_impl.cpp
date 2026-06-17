@@ -338,7 +338,7 @@ std::vector<Txid> TxDownloadManagerImpl::GetUniqueParents(const CTransaction& tx
     unique_parents.reserve(tx.vin.size());
     for (const CTxIn& txin : tx.vin) {
         // We start with all parents, and then remove duplicates below.
-        unique_parents.push_back(txin.prevout.hash);
+        unique_parents.push_back(txin.prevout.GetTxid());
     }
 
     std::sort(unique_parents.begin(), unique_parents.end());

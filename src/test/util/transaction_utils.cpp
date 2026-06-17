@@ -31,8 +31,7 @@ CMutableTransaction BuildSpendingTransaction(const CScript& scriptSig, const CSc
     txSpend.vin.resize(1);
     txSpend.vout.resize(1);
     txSpend.vin[0].scriptWitness = scriptWitness;
-    txSpend.vin[0].prevout.hash = txCredit.GetHash();
-    txSpend.vin[0].prevout.n = 0;
+    txSpend.vin[0].prevout = COutPoint(txCredit.GetHash(), 0);
     txSpend.vin[0].scriptSig = scriptSig;
     txSpend.vin[0].nSequence = CTxIn::SEQUENCE_FINAL;
     txSpend.vout[0].scriptPubKey = CScript();
@@ -106,8 +105,8 @@ bool SignSignature(const SigningProvider &provider, const CTransaction& txFrom, 
 {
     assert(nIn < txTo.vin.size());
     const CTxIn& txin = txTo.vin[nIn];
-    assert(txin.prevout.n < txFrom.vout.size());
-    const CTxOut& txout = txFrom.vout[txin.prevout.n];
+    assert(txin.prevout.GetIndex() < txFrom.vout.size());
+    const CTxOut& txout = txFrom.vout[txin.prevout.GetIndex()];
 
     return SignSignature(provider, txout.scriptPubKey, txTo, nIn, txout.nValue, nHashType, sig_data);
 }

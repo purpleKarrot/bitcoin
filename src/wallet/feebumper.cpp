@@ -197,7 +197,7 @@ Result CreateRateBumpTransaction(CWallet& wallet, const Txid& txid, const CCoinC
     for (const CTxIn& txin : wtx.tx->vin) {
         const Coin& coin = coins.at(txin.prevout);
         if (coin.out.IsNull()) {
-            errors.emplace_back(Untranslated(strprintf("%s:%u is already spent", txin.prevout.hash.GetHex(), txin.prevout.n)));
+            errors.emplace_back(Untranslated(strprintf("%s:%u is already spent", txin.prevout.GetTxid().GetHex(), txin.prevout.GetIndex())));
             return Result::MISC_ERROR;
         }
         PreselectedInput& preset_txin = new_coin_control.Select(txin.prevout);

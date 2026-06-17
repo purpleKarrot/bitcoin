@@ -302,14 +302,14 @@ RPCMethod lockunspent()
 
         const COutPoint outpt(txid, nOutput);
 
-        const auto it = pwallet->mapWallet.find(outpt.hash);
+        const auto it = pwallet->mapWallet.find(outpt.GetTxid());
         if (it == pwallet->mapWallet.end()) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, unknown transaction");
         }
 
         const CWalletTx& trans = it->second;
 
-        if (outpt.n >= trans.tx->vout.size()) {
+        if (outpt.GetIndex() >= trans.tx->vout.size()) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout index out of bounds");
         }
 
@@ -388,8 +388,8 @@ RPCMethod listlockunspent()
     for (const COutPoint& outpt : vOutpts) {
         UniValue o(UniValue::VOBJ);
 
-        o.pushKV("txid", outpt.hash.GetHex());
-        o.pushKV("vout", outpt.n);
+        o.pushKV("txid", outpt.GetTxid().GetHex());
+        o.pushKV("vout", outpt.GetIndex());
         ret.push_back(std::move(o));
     }
 
@@ -616,8 +616,8 @@ RPCMethod listunspent()
             continue;
 
         UniValue entry(UniValue::VOBJ);
-        entry.pushKV("txid", out.outpoint.hash.GetHex());
-        entry.pushKV("vout", out.outpoint.n);
+        entry.pushKV("txid", out.outpoint.GetTxid().GetHex());
+        entry.pushKV("vout", out.outpoint.GetIndex());
 
         if (fValidAddress) {
             entry.pushKV("address", EncodeDestination(address));
@@ -665,7 +665,7 @@ RPCMethod listunspent()
         if (!out.depth) {
             size_t ancestor_count, unused_cluster_count, ancestor_size;
             CAmount ancestor_fees;
-            pwallet->chain().getTransactionAncestry(out.outpoint.hash, ancestor_count, unused_cluster_count, &ancestor_size, &ancestor_fees);
+            pwallet->chain().getTransactionAncestry(out.outpoint.GetTxid(), ancestor_count, unused_cluster_count, &ancestor_size, &ancestor_fees);
             if (ancestor_count) {
                 entry.pushKV("ancestorcount", ancestor_count);
                 entry.pushKV("ancestorsize", ancestor_size);

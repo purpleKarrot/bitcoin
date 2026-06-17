@@ -1029,7 +1029,7 @@ bool SelectionResult::operator<(SelectionResult other) const
 
 std::string COutput::ToString() const
 {
-    return strprintf("COutput(%s, %d, %d) [%s]", outpoint.hash.ToString(), outpoint.n, depth, FormatMoney(txout.nValue));
+    return strprintf("COutput(%s, %d, %d) [%s]", outpoint.GetTxid().ToString(), outpoint.GetIndex(), depth, FormatMoney(txout.nValue));
 }
 
 std::string GetAlgorithmName(const SelectionAlgorithm algo)
