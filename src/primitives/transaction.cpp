@@ -71,34 +71,60 @@ Txid CMutableTransaction::GetHash() const
     return Txid::FromUint256((HashWriter{} << TX_NO_WITNESS(*this)).GetHash());
 }
 
-bool CTransaction::ComputeHasWitness() const
+bool CTransaction::Implementation::ComputeHasWitness() const
 {
     return std::any_of(vin.begin(), vin.end(), [](const auto& input) {
         return !input.scriptWitness.IsNull();
     });
 }
 
-Txid CTransaction::ComputeHash() const
+Txid CTransaction::Implementation::ComputeHash() const
 {
-    return Txid::FromUint256((HashWriter{} << TX_NO_WITNESS(*this)).GetHash());
+    HashWriter hasher;
+    SerializeTransaction(*this, hasher, TX_NO_WITNESS);
+    return Txid::FromUint256(hasher.GetHash());
 }
 
-Wtxid CTransaction::ComputeWitnessHash() const
+Wtxid CTransaction::Implementation::ComputeWitnessHash() const
 {
     if (!HasWitness()) {
         return Wtxid::FromUint256(hash.ToUint256());
     }
 
-    return Wtxid::FromUint256((HashWriter{} << TX_WITH_WITNESS(*this)).GetHash());
+    HashWriter hasher;
+    SerializeTransaction(*this, hasher, TX_WITH_WITNESS);
+    return Wtxid::FromUint256(hasher.GetHash());
 }
 
-CTransaction::CTransaction(const CMutableTransaction& tx) : vin(tx.vin), vout(tx.vout), version{tx.version}, nLockTime{tx.nLockTime}, m_has_witness{ComputeHasWitness()}, hash{ComputeHash()}, m_witness_hash{ComputeWitnessHash()} {}
-CTransaction::CTransaction(CMutableTransaction&& tx) : vin(std::move(tx.vin)), vout(std::move(tx.vout)), version{tx.version}, nLockTime{tx.nLockTime}, m_has_witness{ComputeHasWitness()}, hash{ComputeHash()}, m_witness_hash{ComputeWitnessHash()} {}
+CTransaction::Implementation::Implementation(uint32_t ver, std::vector<CTxIn> inputs, std::vector<CTxOut> outputs, uint32_t locktime)
+    : vin{std::move(inputs)}, vout{std::move(outputs)}, version{ver}, nLockTime{locktime}, m_has_witness{ComputeHasWitness()}, hash{ComputeHash()}, m_witness_hash{ComputeWitnessHash()}
+{
+}
+
+CTransaction::CTransaction()
+    : CTransaction{CURRENT_VERSION, {}, {}, 0}
+{
+}
+
+CTransaction::CTransaction(uint32_t version, std::vector<CTxIn> inputs, std::vector<CTxOut> outputs, uint32_t locktime)
+    : m_impl{std::make_shared<Implementation>(version, std::move(inputs), std::move(outputs), locktime)}
+{
+}
+
+CTransaction::CTransaction(const CMutableTransaction& tx)
+    : CTransaction(tx.version, tx.vin, tx.vout, tx.nLockTime)
+{
+}
+
+CTransaction::CTransaction(CMutableTransaction&& tx)
+    : CTransaction(tx.version, std::move(tx.vin), std::move(tx.vout), tx.nLockTime)
+{
+}
 
 CAmount CTransaction::GetValueOut() const
 {
     CAmount nValueOut = 0;
-    for (const auto& tx_out : vout) {
+    for (const auto& tx_out : m_impl->vout) {
         if (!MoneyRange(tx_out.nValue) || !MoneyRange(nValueOut + tx_out.nValue))
             throw std::runtime_error(std::string(__func__) + ": value out of range");
         nValueOut += tx_out.nValue;
@@ -117,15 +143,15 @@ std::string CTransaction::ToString() const
     std::string str;
     str += strprintf("CTransaction(hash=%s, ver=%u, vin.size=%u, vout.size=%u, nLockTime=%u)\n",
         GetHash().ToString().substr(0,10),
-        version,
-        vin.size(),
-        vout.size(),
-        nLockTime);
-    for (const auto& tx_in : vin)
+        m_impl->version,
+        m_impl->vin.size(),
+        m_impl->vout.size(),
+        m_impl->nLockTime);
+    for (const auto& tx_in : m_impl->vin)
         str += "    " + tx_in.ToString() + "\n";
-    for (const auto& tx_in : vin)
+    for (const auto& tx_in : m_impl->vin)
         str += "    " + tx_in.scriptWitness.ToString() + "\n";
-    for (const auto& tx_out : vout)
+    for (const auto& tx_out : m_impl->vout)
         str += "    " + tx_out.ToString() + "\n";
     return str;
 }

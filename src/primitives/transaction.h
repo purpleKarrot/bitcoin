@@ -282,21 +282,17 @@ public:
     // Default transaction version.
     static const uint32_t CURRENT_VERSION{2};
 
-private:
-    Txid ComputeHash() const;
-    Wtxid ComputeWitnessHash() const;
+    explicit CTransaction();
+    explicit CTransaction(uint32_t version, std::vector<CTxIn> inputs, std::vector<CTxOut> outputs, uint32_t locktime);
 
-    bool ComputeHasWitness() const;
-
-public:
     /** Convert a CMutableTransaction into a CTransaction. */
     explicit CTransaction(const CMutableTransaction& tx);
     explicit CTransaction(CMutableTransaction&& tx);
 
-    [[nodiscard]] auto GetVersion() const -> uint32_t { return version; }
-    [[nodiscard]] auto GetInputs() const -> const std::vector<CTxIn>& { return vin; }
-    [[nodiscard]] auto GetOutputs() const -> const std::vector<CTxOut>& { return vout; }
-    [[nodiscard]] auto GetLockTime() const -> uint32_t { return nLockTime; }
+    [[nodiscard]] auto GetVersion() const -> uint32_t { return m_impl->version; }
+    [[nodiscard]] auto GetInputs() const -> const std::vector<CTxIn>& { return m_impl->vin; }
+    [[nodiscard]] auto GetOutputs() const -> const std::vector<CTxOut>& { return m_impl->vout; }
+    [[nodiscard]] auto GetLockTime() const -> uint32_t { return m_impl->nLockTime; }
 
     template <typename Stream>
     inline void Serialize(Stream& s) const {
@@ -311,11 +307,11 @@ public:
     CTransaction(deserialize_type, Stream& s) : CTransaction(CMutableTransaction(deserialize, s)) {}
 
     bool IsNull() const {
-        return vin.empty() && vout.empty();
+        return m_impl->vin.empty() && m_impl->vout.empty();
     }
 
-    const Txid& GetHash() const LIFETIMEBOUND { return hash; }
-    const Wtxid& GetWitnessHash() const LIFETIMEBOUND { return m_witness_hash; };
+    const Txid& GetHash() const LIFETIMEBOUND { return m_impl->hash; }
+    const Wtxid& GetWitnessHash() const LIFETIMEBOUND { return m_impl->m_witness_hash; };
 
     // Return sum of txouts.
     CAmount GetValueOut() const;
@@ -329,7 +325,7 @@ public:
 
     bool IsCoinBase() const
     {
-        return (vin.size() == 1 && vin[0].prevout.IsNull());
+        return (m_impl->vin.size() == 1 && m_impl->vin[0].prevout.IsNull());
     }
 
     friend bool operator==(const CTransaction& a, const CTransaction& b)
@@ -339,18 +335,35 @@ public:
 
     std::string ToString() const;
 
-    bool HasWitness() const { return m_has_witness; }
+    bool HasWitness() const { return m_impl->m_has_witness; }
 
 private:
-    std::vector<CTxIn> vin;
-    std::vector<CTxOut> vout;
-    uint32_t version;
-    uint32_t nLockTime;
+    struct Implementation {
+        Implementation() = default;
+        Implementation(uint32_t ver, std::vector<CTxIn> inputs, std::vector<CTxOut> outputs, uint32_t locktime);
 
-    /** Memory only. */
-    bool m_has_witness;
-    Txid hash;
-    Wtxid m_witness_hash;
+        Txid ComputeHash() const;
+        Wtxid ComputeWitnessHash() const;
+        bool ComputeHasWitness() const;
+
+        bool HasWitness() const { return m_has_witness; }
+        auto GetVersion() const -> uint32_t { return version; }
+        auto GetInputs() const -> const std::vector<CTxIn>& { return vin; }
+        auto GetOutputs() const -> const std::vector<CTxOut>& { return vout; }
+        auto GetLockTime() const -> uint32_t { return nLockTime; }
+
+        std::vector<CTxIn> vin;
+        std::vector<CTxOut> vout;
+        uint32_t version;
+        uint32_t nLockTime;
+
+        /** Memory only. */
+        bool m_has_witness;
+        Txid hash;
+        Wtxid m_witness_hash;
+    };
+
+    std::shared_ptr<const Implementation> m_impl;
 };
 
 /** A mutable version of CTransaction. */
