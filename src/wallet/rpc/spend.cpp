@@ -1475,17 +1475,17 @@ RPCMethod sendall()
                         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Input not available. UTXO (%s:%d) was already spent.", input.prevout.GetTxid().ToString(), input.prevout.GetIndex()));
                     }
                     const CWalletTx* tx{pwallet->GetWalletTx(input.prevout.GetTxid())};
-                    if (!tx || input.prevout.GetIndex() >= tx->tx->vout.size() || !pwallet->IsMine(tx->tx->vout[input.prevout.GetIndex()])) {
+                    if (!tx || input.prevout.GetIndex() >= tx->tx->GetOutputs().size() || !pwallet->IsMine(tx->tx->GetOutputs()[input.prevout.GetIndex()])) {
                         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Input not found. UTXO (%s:%d) is not part of wallet.", input.prevout.GetTxid().ToString(), input.prevout.GetIndex()));
                     }
                     if (pwallet->GetTxDepthInMainChain(*tx) == 0) {
-                        if (tx->tx->version == TRUC_VERSION && coin_control.m_version != TRUC_VERSION) {
+                        if (tx->tx->GetVersion() == TRUC_VERSION && coin_control.m_version != TRUC_VERSION) {
                             throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Can't spend unconfirmed version 3 pre-selected input with a version %d tx", coin_control.m_version));
-                        } else if (coin_control.m_version == TRUC_VERSION && tx->tx->version != TRUC_VERSION) {
-                            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Can't spend unconfirmed version %d pre-selected input with a version 3 tx", tx->tx->version));
+                        } else if (coin_control.m_version == TRUC_VERSION && tx->tx->GetVersion() != TRUC_VERSION) {
+                            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Can't spend unconfirmed version %d pre-selected input with a version 3 tx", tx->tx->GetVersion()));
                         }
                     }
-                    total_input_value += tx->tx->vout[input.prevout.GetIndex()].nValue;
+                    total_input_value += tx->tx->GetOutputs()[input.prevout.GetIndex()].nValue;
                 }
             } else {
                 CoinFilterParams coins_params;

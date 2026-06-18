@@ -549,7 +549,7 @@ static void entryToJSON(const CTxMemPool& pool, UniValue& info, const CTxMemPool
 
     const CTransaction& tx = e.GetTx();
     std::set<std::string> setDepends;
-    for (const CTxIn& txin : tx.vin)
+    for (const CTxIn& txin : tx.GetInputs())
     {
         if (pool.exists(txin.prevout.GetTxid()))
             setDepends.insert(txin.prevout.GetTxid().ToString());
