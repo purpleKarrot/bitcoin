@@ -484,7 +484,7 @@ struct ChainMan {
 
 } // namespace
 
-struct btck_Transaction : Handle<btck_Transaction, std::shared_ptr<const CTransaction>> {};
+struct btck_Transaction : Handle<btck_Transaction, CTransaction> {};
 struct btck_TransactionOutput : Handle<btck_TransactionOutput, CTxOut> {};
 struct btck_ScriptPubkey : Handle<btck_ScriptPubkey, CScript> {};
 struct btck_LoggingConnection : Handle<btck_LoggingConnection, LoggingConnection> {};
@@ -510,7 +510,7 @@ btck_Transaction* btck_transaction_create(const void* raw_transaction, size_t ra
     assert(raw_transaction != nullptr || raw_transaction_len == 0);
     try {
         SpanReader stream{std::span{reinterpret_cast<const std::byte*>(raw_transaction), raw_transaction_len}};
-        return btck_Transaction::create(std::make_shared<const CTransaction>(deserialize, TX_WITH_WITNESS, stream));
+        return btck_Transaction::create(deserialize, TX_WITH_WITNESS, stream);
     } catch (...) {
         return nullptr;
     }

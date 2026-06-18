@@ -282,7 +282,7 @@ public:
     // Default transaction version.
     static const uint32_t CURRENT_VERSION{2};
 
-    explicit CTransaction();
+    CTransaction();
     explicit CTransaction(uint32_t version, std::vector<CTxIn> inputs, std::vector<CTxOut> outputs, uint32_t locktime);
 
     /** Convert a CMutableTransaction into a CTransaction. */
@@ -299,8 +299,16 @@ public:
         SerializeTransaction(*this, s, s.template GetParams<TransactionSerParams>());
     }
 
-    /** This deserializing constructor is provided instead of an Unserialize method.
-     *  Unserialize is not possible, since it would require overwriting const fields. */
+    template <typename Stream>
+    inline void Unserialize(Stream& s) {
+        auto impl = std::make_shared<Implementation>();
+        UnserializeTransaction(*impl, s, s.template GetParams<TransactionSerParams>());
+        impl->m_has_witness = impl->ComputeHasWitness();
+        impl->hash = impl->ComputeHash();
+        impl->m_witness_hash = impl->ComputeWitnessHash();
+        m_impl = std::move(impl);
+    }
+
     template <typename Stream>
     CTransaction(deserialize_type, const TransactionSerParams& params, Stream& s) : CTransaction(CMutableTransaction(deserialize, params, s)) {}
     template <typename Stream>
@@ -333,9 +341,29 @@ public:
         return a.GetWitnessHash() == b.GetWitnessHash();
     }
 
+    friend auto operator<=>(const CTransaction& a, const CTransaction& b)
+    {
+        return a.GetWitnessHash() <=> b.GetWitnessHash();
+    }
+
     std::string ToString() const;
 
     bool HasWitness() const { return m_impl->m_has_witness; }
+
+    // easy to refactor with bitcoin-tidy: remove `*` and replace `->` with `.`.
+    auto operator*() const -> const CTransaction& { return *this; }
+    auto operator->() const -> const CTransaction* { return this; }
+
+    // clients that use any of these really want `std::optional<CTransaction>`.
+    CTransaction(std::nullptr_t) : CTransaction{} {}
+    friend bool operator==(const CTransaction& a, std::nullptr_t) { return a == CTransaction{}; }
+    explicit operator bool() const { return *this == CTransaction{}; }
+    void reset() { *this = CTransaction{}; }
+
+    auto get() const -> const CTransaction* { return (*this != CTransaction{}) ? this : nullptr; }
+    auto use_count() const { return m_impl.use_count(); }
+
+    friend std::ostream& operator<<(std::ostream& os, const CTransaction& tx) { return os << tx.ToString(); }
 
 private:
     struct Implementation {
@@ -418,19 +446,7 @@ struct CMutableTransaction
     }
 };
 
-typedef std::shared_ptr<const CTransaction> CTransactionRef;
-template <typename Tx> static inline CTransactionRef MakeTransactionRef(Tx&& txIn) { return std::make_shared<const CTransaction>(std::forward<Tx>(txIn)); }
-
-namespace std {
-/** Disable default std::hash for CTransactionRef to prevent accidentally
- *  comparing by pointer. Use CTransactionRefHash or provide a custom
- *  hasher. */
-template <>
-struct hash<CTransactionRef> {
-    hash() = delete;
-    // Belt-and-suspenders, already implied by the above.
-    size_t operator()(const CTransactionRef&) const = delete;
-};
-} // namespace std
+using CTransactionRef = CTransaction;
+template <typename Tx> static inline CTransaction MakeTransactionRef(Tx&& txIn) { return CTransaction(std::forward<Tx>(txIn)); }
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H
