@@ -201,7 +201,7 @@ std::optional<COutPoint> GetChildEvictingPrevout(const CTxMemPool& tx_pool)
                 // Find an input that doesn't spend from parent's txid
                 const auto& only_child = children.begin()->get().GetTx();
                 for (const auto& tx_input : only_child.GetInputs()) {
-                    if (tx_input.prevout.hash != tx_info.tx->GetHash()) {
+                    if (tx_input.prevout.GetTxid() != tx_info.tx->GetHash()) {
                         return tx_input.prevout;
                     }
                 }
@@ -328,7 +328,7 @@ FUZZ_TARGET(ephemeral_package_eval, .init = initialize_tx_pool)
         if (fuzzed_data_provider.ConsumeBool()) {
             const auto& txid = fuzzed_data_provider.ConsumeBool() ?
                                    txs.back()->GetHash() :
-                                   PickValue(fuzzed_data_provider, mempool_outpoints).hash;
+                                   PickValue(fuzzed_data_provider, mempool_outpoints).GetTxid();
             const auto delta = fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(-50 * COIN, +50 * COIN);
             // We only prioritise out of mempool transactions since PrioritiseTransaction doesn't
             // filter for ephemeral dust
@@ -496,7 +496,7 @@ FUZZ_TARGET(tx_package_eval, .init = initialize_tx_pool)
         if (fuzzed_data_provider.ConsumeBool()) {
             const auto& txid = fuzzed_data_provider.ConsumeBool() ?
                                    txs.back()->GetHash() :
-                                   PickValue(fuzzed_data_provider, mempool_outpoints).hash;
+                                   PickValue(fuzzed_data_provider, mempool_outpoints).GetTxid();
             const auto delta = fuzzed_data_provider.ConsumeIntegralInRange<CAmount>(-50 * COIN, +50 * COIN);
             tx_pool.PrioritiseTransaction(txid, delta);
         }

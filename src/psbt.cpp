@@ -23,7 +23,7 @@ PartiallySignedTransaction::PartiallySignedTransaction(const CMutableTransaction
     fallback_locktime = tx.nLockTime;
     inputs.reserve(tx.vin.size());
     for (const CTxIn& input : tx.vin) {
-        inputs.emplace_back(GetVersion(), input.prevout.hash, input.prevout.n, input.nSequence);
+        inputs.emplace_back(GetVersion(), input.prevout.GetTxid(), input.prevout.GetIndex(), input.nSequence);
     }
     outputs.reserve(tx.vout.size());
     for (const CTxOut& output : tx.vout) {
@@ -131,8 +131,7 @@ std::optional<CMutableTransaction> PartiallySignedTransaction::GetUnsignedTx() c
     uint32_t max_sequence = CTxIn::SEQUENCE_FINAL;
     for (const PSBTInput& input : inputs) {
         CTxIn txin;
-        txin.prevout.hash = input.prev_txid;
-        txin.prevout.n = input.prev_out;
+        txin.prevout = COutPoint(input.prev_txid, input.prev_out);
         txin.nSequence = input.sequence.value_or(max_sequence);
         mtx.vin.push_back(txin);
     }
@@ -563,13 +562,13 @@ bool PSBTInputSignedAndVerified(const PartiallySignedTransaction& psbt, unsigned
     if (input.non_witness_utxo) {
         // If we're taking our information from a non-witness UTXO, verify that it matches the prevout.
         COutPoint prevout = input.GetOutPoint();
-        if (prevout.n >= input.non_witness_utxo->GetOutputs().size()) {
+        if (prevout.GetIndex() >= input.non_witness_utxo->GetOutputs().size()) {
             return false;
         }
-        if (input.non_witness_utxo->GetHash() != prevout.hash) {
+        if (input.non_witness_utxo->GetHash() != prevout.GetTxid()) {
             return false;
         }
-        utxo = input.non_witness_utxo->GetOutputs()[prevout.n];
+        utxo = input.non_witness_utxo->GetOutputs()[prevout.GetIndex()];
     } else if (!input.witness_utxo.IsNull()) {
         utxo = input.witness_utxo;
     } else {
@@ -668,13 +667,13 @@ PSBTError SignPSBTInput(const SigningProvider& provider, PartiallySignedTransact
     if (input.non_witness_utxo) {
         // If we're taking our information from a non-witness UTXO, verify that it matches the prevout.
         COutPoint prevout = input.GetOutPoint();
-        if (prevout.n >= input.non_witness_utxo->GetOutputs().size()) {
+        if (prevout.GetIndex() >= input.non_witness_utxo->GetOutputs().size()) {
             return PSBTError::MISSING_INPUTS;
         }
-        if (input.non_witness_utxo->GetHash() != prevout.hash) {
+        if (input.non_witness_utxo->GetHash() != prevout.GetTxid()) {
             return PSBTError::MISSING_INPUTS;
         }
-        utxo = input.non_witness_utxo->GetOutputs()[prevout.n];
+        utxo = input.non_witness_utxo->GetOutputs()[prevout.GetIndex()];
     } else if (!input.witness_utxo.IsNull()) {
         utxo = input.witness_utxo;
         // When we're taking our information from a witness UTXO, we can't verify it is actually data from

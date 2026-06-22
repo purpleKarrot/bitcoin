@@ -718,7 +718,7 @@ btck_TransactionOutPoint* btck_transaction_out_point_copy(const btck_Transaction
 
 uint32_t btck_transaction_out_point_get_index(const btck_TransactionOutPoint* out_point)
 {
-    return btck_TransactionOutPoint::get(out_point).n;
+    return btck_TransactionOutPoint::get(out_point).GetIndex();
 }
 
 const btck_Txid* btck_transaction_out_point_get_txid(const btck_TransactionOutPoint* out_point)

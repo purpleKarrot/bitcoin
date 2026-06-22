@@ -13,9 +13,9 @@ namespace wallet {
 bool InputIsMine(const CWallet& wallet, const CTxIn& txin)
 {
     AssertLockHeld(wallet.cs_wallet);
-    const CWalletTx* prev = wallet.GetWalletTx(txin.prevout.hash);
-    if (prev && txin.prevout.n < prev->tx->GetOutputs().size()) {
-        return wallet.IsMine(prev->tx->GetOutputs()[txin.prevout.n]);
+    const CWalletTx* prev = wallet.GetWalletTx(txin.prevout.GetTxid());
+    if (prev && txin.prevout.GetIndex() < prev->tx->GetOutputs().size()) {
+        return wallet.IsMine(prev->tx->GetOutputs()[txin.prevout.GetIndex()]);
     }
     return false;
 }
@@ -221,9 +221,9 @@ bool CachedTxIsTrusted(const CWallet& wallet, const CWalletTx& wtx, std::set<Txi
     for (const CTxIn& txin : wtx.tx->GetInputs())
     {
         // Transactions not sent by us: not trusted
-        const CWalletTx* parent = wallet.GetWalletTx(txin.prevout.hash);
+        const CWalletTx* parent = wallet.GetWalletTx(txin.prevout.GetTxid());
         if (parent == nullptr) return false;
-        const CTxOut& parentOut = parent->tx->GetOutputs()[txin.prevout.n];
+        const CTxOut& parentOut = parent->tx->GetOutputs()[txin.prevout.GetIndex()];
         // Check that this specific input being spent is trusted
         if (!wallet.IsMine(parentOut)) return false;
         // If we've already trusted this parent, continue
@@ -341,7 +341,7 @@ std::set< std::set<CTxDestination> > GetAddressGroupings(const CWallet& wallet)
                 CTxDestination address;
                 if(!InputIsMine(wallet, txin)) /* If this input isn't mine, ignore it */
                     continue;
-                if(!ExtractDestination(wallet.mapWallet.at(txin.prevout.hash).tx->GetOutputs()[txin.prevout.n].scriptPubKey, address))
+                if(!ExtractDestination(wallet.mapWallet.at(txin.prevout.GetTxid()).tx->GetOutputs()[txin.prevout.GetIndex()].scriptPubKey, address))
                     continue;
                 grouping.insert(address);
                 any_mine = true;

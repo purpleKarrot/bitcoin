@@ -46,7 +46,7 @@ static inline bool sanity_check(const std::vector<CTransactionRef>& transactions
         if (fee == 0) continue;
         auto outpoint_ = outpoint; // structured bindings can't be captured in C++17, so we need to use a variable
         const bool found = std::any_of(transactions.cbegin(), transactions.cend(), [&](const auto& tx) {
-            return outpoint_.hash == tx->GetHash() && outpoint_.n < tx->GetOutputs().size();
+            return outpoint_.GetTxid() == tx->GetHash() && outpoint_.GetIndex() < tx->GetOutputs().size();
         });
         if (!found) return false;
     }

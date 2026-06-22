@@ -1472,11 +1472,11 @@ RPCMethod sendall()
             } else if (options.exists("inputs")) {
                 for (const CTxIn& input : rawTx.vin) {
                     if (pwallet->IsSpent(input.prevout)) {
-                        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Input not available. UTXO (%s:%d) was already spent.", input.prevout.hash.ToString(), input.prevout.n));
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Input not available. UTXO (%s:%d) was already spent.", input.prevout.GetTxid().ToString(), input.prevout.GetIndex()));
                     }
-                    const CWalletTx* tx{pwallet->GetWalletTx(input.prevout.hash)};
-                    if (!tx || input.prevout.n >= tx->tx->GetOutputs().size() || !pwallet->IsMine(tx->tx->GetOutputs()[input.prevout.n])) {
-                        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Input not found. UTXO (%s:%d) is not part of wallet.", input.prevout.hash.ToString(), input.prevout.n));
+                    const CWalletTx* tx{pwallet->GetWalletTx(input.prevout.GetTxid())};
+                    if (!tx || input.prevout.GetIndex() >= tx->tx->GetOutputs().size() || !pwallet->IsMine(tx->tx->GetOutputs()[input.prevout.GetIndex()])) {
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Input not found. UTXO (%s:%d) is not part of wallet.", input.prevout.GetTxid().ToString(), input.prevout.GetIndex()));
                     }
                     if (pwallet->GetTxDepthInMainChain(*tx) == 0) {
                         if (tx->tx->GetVersion() == TRUC_VERSION && coin_control.m_version != TRUC_VERSION) {
@@ -1485,7 +1485,7 @@ RPCMethod sendall()
                             throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Can't spend unconfirmed version %d pre-selected input with a version 3 tx", tx->tx->GetVersion()));
                         }
                     }
-                    total_input_value += tx->tx->GetOutputs()[input.prevout.n].nValue;
+                    total_input_value += tx->tx->GetOutputs()[input.prevout.GetIndex()].nValue;
                 }
             } else {
                 CoinFilterParams coins_params;
@@ -1498,7 +1498,7 @@ RPCMethod sendall()
                     if (output.depth == 0 && coin_control.m_version == TRUC_VERSION) {
                         coin_control.m_max_tx_weight = TRUC_CHILD_MAX_WEIGHT;
                     }
-                    CTxIn input(output.outpoint.hash, output.outpoint.n, CScript(), rbf ? MAX_BIP125_RBF_SEQUENCE : CTxIn::MAX_SEQUENCE_NONFINAL);
+                    CTxIn input(output.outpoint.GetTxid(), output.outpoint.GetIndex(), CScript(), rbf ? MAX_BIP125_RBF_SEQUENCE : CTxIn::MAX_SEQUENCE_NONFINAL);
                     rawTx.vin.push_back(input);
                     total_input_value += output.txout.nValue;
                 }

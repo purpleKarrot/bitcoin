@@ -376,7 +376,7 @@ void Chainstate::MaybeUpdateMempoolForReorg(
         // If the transaction spends any coinbase outputs, it must be mature.
         if (it->GetSpendsCoinbase()) {
             for (const CTxIn& txin : tx.GetInputs()) {
-                if (m_mempool->exists(txin.prevout.hash)) continue;
+                if (m_mempool->exists(txin.prevout.GetTxid())) continue;
                 const Coin& coin{CoinsTip().AccessCoin(txin.prevout)};
                 assert(!coin.IsSpent());
                 const auto mempool_spend_height{m_chain.Tip()->nHeight + 1};
@@ -422,11 +422,11 @@ static bool CheckInputsFromMempoolAndCache(const CTransaction& tx, TxValidationS
         // it is available in our current ChainstateActive UTXO set,
         // or it's a UTXO provided by a transaction in our mempool.
         // Ensure the scriptPubKeys in Coins from CoinsView are correct.
-        const CTransactionRef& txFrom = pool.get(txin.prevout.hash);
+        const CTransactionRef& txFrom = pool.get(txin.prevout.GetTxid());
         if (txFrom) {
-            assert(txFrom->GetHash() == txin.prevout.hash);
-            assert(txFrom->GetOutputs().size() > txin.prevout.n);
-            assert(txFrom->GetOutputs()[txin.prevout.n] == coin.out);
+            assert(txFrom->GetHash() == txin.prevout.GetTxid());
+            assert(txFrom->GetOutputs().size() > txin.prevout.GetIndex());
+            assert(txFrom->GetOutputs()[txin.prevout.GetIndex()] == coin.out);
         } else {
             const Coin& coinFromUTXOSet = coins_tip.AccessCoin(txin.prevout);
             assert(!coinFromUTXOSet.IsSpent());
@@ -2024,7 +2024,7 @@ std::optional<std::pair<ScriptError, std::string>> CScriptCheck::operator()() {
     if (VerifyScript(scriptSig, m_tx_out.scriptPubKey, witness, m_flags, CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *m_signature_cache, *txdata), &error)) {
         return std::nullopt;
     } else {
-        auto debug_str = strprintf("input %i of %s (wtxid %s), spending %s:%i", nIn, ptxTo->GetHash().ToString(), ptxTo->GetWitnessHash().ToString(), ptxTo->GetInputs()[nIn].prevout.hash.ToString(), ptxTo->GetInputs()[nIn].prevout.n);
+        auto debug_str = strprintf("input %i of %s (wtxid %s), spending %s:%i", nIn, ptxTo->GetHash().ToString(), ptxTo->GetWitnessHash().ToString(), ptxTo->GetInputs()[nIn].prevout.GetTxid().ToString(), ptxTo->GetInputs()[nIn].prevout.GetIndex());
         return std::make_pair(error, std::move(debug_str));
     }
 }
@@ -2162,7 +2162,7 @@ int ApplyTxInUndo(Coin&& undo, CCoinsViewCache& view, const COutPoint& out)
         // Missing undo metadata (height and coinbase). Older versions included this
         // information only in undo records for the last spend of a transactions'
         // outputs. This implies that it must be present for some other output of the same tx.
-        const Coin& alternate = AccessByTxid(view, out.hash);
+        const Coin& alternate = AccessByTxid(view, out.GetTxid());
         if (!alternate.IsSpent()) {
             undo.nHeight = alternate.nHeight;
             undo.fCoinBase = alternate.fCoinBase;
@@ -5818,11 +5818,10 @@ util::Result<void> ChainstateManager::PopulateAndValidateSnapshot(
             for (size_t i = 0; i < coins_per_txid; i++) {
                 COutPoint outpoint;
                 Coin coin;
-                outpoint.n = static_cast<uint32_t>(ReadCompactSize(coins_file));
-                outpoint.hash = txid;
+                outpoint = COutPoint(txid, static_cast<uint32_t>(ReadCompactSize(coins_file)));
                 coins_file >> coin;
                 if (coin.nHeight > base_height ||
-                    outpoint.n >= std::numeric_limits<decltype(outpoint.n)>::max() // Avoid integer wrap-around in coinstats.cpp:ApplyHash
+                    outpoint.GetIndex() >= std::numeric_limits<decltype(outpoint.GetIndex())>::max() // Avoid integer wrap-around in coinstats.cpp:ApplyHash
                 ) {
                     return util::Error{Untranslated(strprintf("Bad snapshot data after deserializing %d coins",
                               coins_count - coins_left))};

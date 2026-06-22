@@ -175,11 +175,11 @@ TxSize CalculateMaximumSignedTxSize(const CTransaction &tx, const CWallet *walle
     std::vector<CTxOut> txouts;
     // Look up the inputs. The inputs are either in the wallet, or in coin_control.
     for (const CTxIn& input : tx.GetInputs()) {
-        const auto mi = wallet->mapWallet.find(input.prevout.hash);
+        const auto mi = wallet->mapWallet.find(input.prevout.GetTxid());
         // Can not estimate size without knowing the input details
         if (mi != wallet->mapWallet.end()) {
-            assert(input.prevout.n < mi->second.tx->GetOutputs().size());
-            txouts.emplace_back(mi->second.tx->GetOutputs().at(input.prevout.n));
+            assert(input.prevout.GetIndex() < mi->second.tx->GetOutputs().size());
+            txouts.emplace_back(mi->second.tx->GetOutputs().at(input.prevout.GetIndex()));
         } else if (coin_control) {
             const auto& txout{coin_control->GetExternalOutput(input.prevout)};
             if (!txout) return TxSize{-1, -1};
@@ -340,15 +340,15 @@ CoinsResult AvailableCoins(const CWallet& wallet,
         const CWalletTx& wtx = txo.GetWalletTx();
         const CTxOut& output = txo.GetTxOut();
 
-        if (tx_safe_cache.contains(outpoint.hash) && !tx_safe_cache.at(outpoint.hash).first) {
+        if (tx_safe_cache.contains(outpoint.GetTxid()) && !tx_safe_cache.at(outpoint.GetTxid()).first) {
             continue;
         }
 
         int nDepth = wallet.GetTxDepthInMainChain(wtx);
 
         // Perform tx level checks if we haven't already come across outputs from this tx before.
-        if (!tx_safe_cache.contains(outpoint.hash)) {
-            tx_safe_cache[outpoint.hash] = {false, false};
+        if (!tx_safe_cache.contains(outpoint.GetTxid())) {
+            tx_safe_cache[outpoint.GetTxid()] = {false, false};
 
             if (wallet.IsTxImmatureCoinBase(wtx) && !params.include_immature_coinbase)
                 continue;
@@ -417,9 +417,9 @@ CoinsResult AvailableCoins(const CWallet& wallet,
                 continue;
             }
 
-            tx_safe_cache[outpoint.hash] = {true, safeTx};
+            tx_safe_cache[outpoint.GetTxid()] = {true, safeTx};
         }
-        const auto& [tx_ok, tx_safe] = tx_safe_cache.at(outpoint.hash);
+        const auto& [tx_ok, tx_safe] = tx_safe_cache.at(outpoint.GetTxid());
         if (!Assume(tx_ok)) {
             continue;
         }
@@ -502,7 +502,7 @@ CoinsResult AvailableCoins(const CWallet& wallet,
 
         const Txid& truc_txid = highest_value_truc_tx->first;
         for (const auto& [type, output] : unconfirmed_truc_coins) {
-            if (output.outpoint.hash == truc_txid) {
+            if (output.outpoint.GetTxid() == truc_txid) {
                     result.Add(type, output);
             }
         }
@@ -524,19 +524,19 @@ CoinsResult AvailableCoins(const CWallet& wallet,
 const CTxOut& FindNonChangeParentOutput(const CWallet& wallet, const COutPoint& outpoint)
 {
     AssertLockHeld(wallet.cs_wallet);
-    const CWalletTx* wtx{Assert(wallet.GetWalletTx(outpoint.hash))};
+    const CWalletTx* wtx{Assert(wallet.GetWalletTx(outpoint.GetTxid()))};
 
     const CTransaction* ptx = wtx->tx.get();
-    int n = outpoint.n;
+    int n = outpoint.GetIndex();
     while (OutputIsChange(wallet, ptx->GetOutputs()[n]) && ptx->GetInputs().size() > 0) {
         const COutPoint& prevout = ptx->GetInputs()[0].prevout;
-        const CWalletTx* it = wallet.GetWalletTx(prevout.hash);
-        if (!it || it->tx->GetOutputs().size() <= prevout.n ||
-            !wallet.IsMine(it->tx->GetOutputs()[prevout.n])) {
+        const CWalletTx* it = wallet.GetWalletTx(prevout.GetTxid());
+        if (!it || it->tx->GetOutputs().size() <= prevout.GetIndex() ||
+            !wallet.IsMine(it->tx->GetOutputs()[prevout.GetIndex()])) {
             break;
         }
         ptx = it->tx.get();
-        n = prevout.n;
+        n = prevout.GetIndex();
     }
     return ptx->GetOutputs()[n];
 }
@@ -579,7 +579,7 @@ FilteredOutputGroups GroupOutputs(const CWallet& wallet,
             for (const COutput& output : outputs) {
                 // Get mempool info
                 size_t ancestors, cluster_count;
-                wallet.chain().getTransactionAncestry(output.outpoint.hash, ancestors, cluster_count);
+                wallet.chain().getTransactionAncestry(output.outpoint.GetTxid(), ancestors, cluster_count);
 
                 // Create a new group per output and add it to the all groups vector
                 OutputGroup group(coin_sel_params);
@@ -636,7 +636,7 @@ FilteredOutputGroups GroupOutputs(const CWallet& wallet,
     for (const auto& [type, outs] : coins.coins) {
         for (const COutput& output : outs) {
             size_t ancestors, cluster_count;
-            wallet.chain().getTransactionAncestry(output.outpoint.hash, ancestors, cluster_count);
+            wallet.chain().getTransactionAncestry(output.outpoint.GetTxid(), ancestors, cluster_count);
 
             const auto& shared_output = std::make_shared<COutput>(output);
             // Filter for positive only before adding the output

@@ -175,8 +175,8 @@ CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniVal
 static void TxInErrorToJSON(const CTxIn& txin, UniValue& vErrorsRet, const std::string& strMessage)
 {
     UniValue entry(UniValue::VOBJ);
-    entry.pushKV("txid", txin.prevout.hash.ToString());
-    entry.pushKV("vout", txin.prevout.n);
+    entry.pushKV("txid", txin.prevout.GetTxid().ToString());
+    entry.pushKV("vout", txin.prevout.GetIndex());
     UniValue witness(UniValue::VARR);
     for (unsigned int i = 0; i < txin.scriptWitness.stack.size(); i++) {
         witness.push_back(HexStr(txin.scriptWitness.stack[i]));

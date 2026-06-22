@@ -71,7 +71,7 @@ public:
      */
     size_t operator()(const COutPoint& id) const noexcept
     {
-        return m_hasher(id.hash.ToUint256(), id.n);
+        return m_hasher(id.GetTxid().ToUint256(), id.GetIndex());
     }
 };
 

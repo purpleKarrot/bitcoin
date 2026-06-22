@@ -947,8 +947,8 @@ static RPCMethod getblocktemplate()
         UniValue deps(UniValue::VARR);
         for (const CTxIn &in : tx.GetInputs())
         {
-            if (setTxIndex.contains(in.prevout.hash))
-                deps.push_back(setTxIndex[in.prevout.hash]);
+            if (setTxIndex.contains(in.prevout.GetTxid()))
+                deps.push_back(setTxIndex[in.prevout.GetTxid()]);
         }
         entry.pushKV("depends", std::move(deps));
 

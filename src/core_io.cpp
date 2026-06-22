@@ -452,8 +452,8 @@ void TxToUniv(const CTransaction& tx, const uint256& block_hash, UniValue& entry
         if (tx.IsCoinBase()) {
             in.pushKV("coinbase", HexStr(txin.scriptSig));
         } else {
-            in.pushKV("txid", txin.prevout.hash.GetHex());
-            in.pushKV("vout", txin.prevout.n);
+            in.pushKV("txid", txin.prevout.GetTxid().GetHex());
+            in.pushKV("vout", txin.prevout.GetIndex());
             UniValue o(UniValue::VOBJ);
             o.pushKV("asm", ScriptToAsmStr(txin.scriptSig, true));
             o.pushKV("hex", HexStr(txin.scriptSig));

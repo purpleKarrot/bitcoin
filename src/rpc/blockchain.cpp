@@ -2244,7 +2244,7 @@ bool FindScriptPubKey(std::atomic<int>& scan_progress, const std::atomic<bool>& 
         }
         if (count % 256 == 0) {
             // update progress reference every 256 item
-            uint32_t high = 0x100 * *UCharCast(key.hash.begin()) + *(UCharCast(key.hash.begin()) + 1);
+            uint32_t high = 0x100 * *UCharCast(key.GetTxid().begin()) + *(UCharCast(key.GetTxid().begin()) + 1);
             scan_progress = (int)(high * 100.0 / 65536.0 + 0.5);
         }
         if (needles.contains(coin.out.scriptPubKey)) {
@@ -2464,8 +2464,8 @@ static RPCMethod scantxoutset()
             total_in += txo.nValue;
 
             UniValue unspent(UniValue::VOBJ);
-            unspent.pushKV("txid", outpoint.hash.GetHex());
-            unspent.pushKV("vout", outpoint.n);
+            unspent.pushKV("txid", outpoint.GetTxid().GetHex());
+            unspent.pushKV("vout", outpoint.GetIndex());
             unspent.pushKV("scriptPubKey", HexStr(txo.scriptPubKey));
             unspent.pushKV("desc", descriptors[txo.scriptPubKey]);
             unspent.pushKV("amount", ValueFromAmount(txo.nValue));
@@ -2841,8 +2841,8 @@ static RPCMethod getdescriptoractivity()
         }
         event.pushKV("spend_txid", tx->GetHash().ToString());
         event.pushKV("spend_vin", vin);
-        event.pushKV("prevout_txid", txin.prevout.hash.ToString());
-        event.pushKV("prevout_vout", txin.prevout.n);
+        event.pushKV("prevout_txid", txin.prevout.GetTxid().ToString());
+        event.pushKV("prevout_vout", txin.prevout.GetIndex());
         event.pushKV("prevout_spk", spkUv);
 
         return event;
@@ -2927,12 +2927,12 @@ static RPCMethod getdescriptoractivity()
                 if (!coin) {
                     // If not found in the chain, check the mempool. Likely, this is a
                     // child transaction of another transaction in the mempool.
-                    CTransactionRef prev_tx = CHECK_NONFATAL(mempool.get(txin.prevout.hash));
+                    CTransactionRef prev_tx = CHECK_NONFATAL(mempool.get(txin.prevout.GetTxid()));
 
-                    if (txin.prevout.n >= prev_tx->GetOutputs().size()) {
+                    if (txin.prevout.GetIndex() >= prev_tx->GetOutputs().size()) {
                         throw std::runtime_error("Invalid output index");
                     }
-                    const CTxOut& out = prev_tx->GetOutputs()[txin.prevout.n];
+                    const CTxOut& out = prev_tx->GetOutputs()[txin.prevout.GetIndex()];
                     scriptPubKey = out.scriptPubKey;
                     value = out.nValue;
                 } else {
@@ -3429,17 +3429,17 @@ UniValue WriteUTXOSnapshot(
     };
 
     pcursor->GetKey(key);
-    last_hash = key.hash;
+    last_hash = key.GetTxid();
     while (pcursor->Valid()) {
         if (iter % 5000 == 0) interruption_point();
         ++iter;
         if (pcursor->GetKey(key) && pcursor->GetValue(coin)) {
-            if (key.hash != last_hash) {
+            if (key.GetTxid() != last_hash) {
                 write_coins_to_file(afile, last_hash, coins, written_coins_count);
-                last_hash = key.hash;
+                last_hash = key.GetTxid();
                 coins.clear();
             }
-            coins.emplace_back(key.n, coin);
+            coins.emplace_back(key.GetIndex(), coin);
         }
         pcursor->Next();
     }
