@@ -101,8 +101,8 @@ void CCoinsViewCache::AddCoin(const COutPoint &outpoint, Coin&& coin, bool possi
     if (fresh) CCoinsCacheEntry::SetFresh(*it, m_sentinel);
     cachedCoinsUsage += it->second.coin.DynamicMemoryUsage();
     TRACEPOINT(utxocache, add,
-           outpoint.hash.data(),
-           (uint32_t)outpoint.n,
+           outpoint.GetTxid().data(),
+           (uint32_t)outpoint.GetIndex(),
            (uint32_t)it->second.coin.nHeight,
            (int64_t)it->second.coin.out.nValue,
            (bool)it->second.coin.IsCoinBase());
@@ -135,8 +135,8 @@ bool CCoinsViewCache::SpendCoin(const COutPoint &outpoint, Coin* moveout) {
     Assume(TrySub(m_dirty_count, it->second.IsDirty()));
     Assume(TrySub(cachedCoinsUsage, it->second.coin.DynamicMemoryUsage()));
     TRACEPOINT(utxocache, spent,
-           outpoint.hash.data(),
-           (uint32_t)outpoint.n,
+           outpoint.GetTxid().data(),
+           (uint32_t)outpoint.GetIndex(),
            (uint32_t)it->second.coin.nHeight,
            (int64_t)it->second.coin.out.nValue,
            (bool)it->second.coin.IsCoinBase());
@@ -294,8 +294,8 @@ void CCoinsViewCache::Uncache(const COutPoint& hash)
     if (it != cacheCoins.end() && !it->second.IsDirty()) {
         Assume(TrySub(cachedCoinsUsage, it->second.coin.DynamicMemoryUsage()));
         TRACEPOINT(utxocache, uncache,
-               hash.hash.data(),
-               (uint32_t)hash.n,
+               hash.GetTxid().data(),
+               (uint32_t)hash.GetIndex(),
                (uint32_t)it->second.coin.nHeight,
                (int64_t)it->second.coin.out.nValue,
                (bool)it->second.coin.IsCoinBase());
