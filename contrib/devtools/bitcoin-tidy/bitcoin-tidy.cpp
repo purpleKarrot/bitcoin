@@ -4,6 +4,7 @@
 
 #include "nontrivial-threadlocal.h"
 #include "observers.h"
+#include "outpoint-assignment.h"
 
 #include <clang-tidy/ClangTidyModule.h>
 
@@ -12,6 +13,8 @@ class BitcoinModule final : public clang::tidy::ClangTidyModule
 public:
     void addCheckFactories(clang::tidy::ClangTidyCheckFactories& CheckFactories) override
     {
+        CheckFactories.registerCheck<OutpointAssignment>("bitcoin-outpoint-assignment");
+        CheckFactories.registerCheck<OutpointObservers>("bitcoin-outpoint-observers");
         CheckFactories.registerCheck<TxObservers>("bitcoin-tx-observers");
         CheckFactories.registerCheck<bitcoin::NonTrivialThreadLocal>("bitcoin-nontrivial-threadlocal");
     }

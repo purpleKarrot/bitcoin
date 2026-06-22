@@ -33,6 +33,7 @@ target_sources(bitcoin-tidy PRIVATE
     nontrivial-threadlocal.cpp
     observers.cpp
     observers-base.cpp
+    outpoint-assignment.cpp
 )
 
 # Disable RTTI and exceptions as necessary
