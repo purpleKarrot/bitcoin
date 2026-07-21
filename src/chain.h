@@ -7,6 +7,7 @@
 #define BITCOIN_CHAIN_H
 
 #include <arith_uint256.h>
+#include <chain_view.h>
 #include <consensus/params.h>
 #include <flatfile.h>
 #include <kernel/cs_main.h>
@@ -451,5 +452,24 @@ CBlockLocator GetLocator(const CBlockIndex* index);
 
 /** Construct a list of hash entries to put in a locator.  */
 std::vector<uint256> LocatorEntries(const CBlockIndex* index);
+
+inline AnyChainView AsChainView(const CBlockIndex* index)
+{
+    if (index == nullptr) return {};
+    auto elem = [index](int height) { return index->GetAncestor(height)->GetBlockHeader(); };
+    return AnyChainView{std::views::iota(0, index->nHeight + 1) | std::views::transform(elem)};
+}
+
+auto MedianTimePast(ChainView auto chain)
+{
+    assert(!chain.empty());
+    constexpr auto getTime = [](const CBlockHeader& header) { return header.GetBlockTime(); };
+    auto view = chain | std::views::transform(getTime) | std::views::reverse | std::views::take(11);
+    std::vector<int64_t> times(view.size());
+    std::ranges::copy(view, times.begin());
+    auto const middle = times.begin() + (times.size() / 2);
+    std::ranges::nth_element(times, middle);
+    return *middle;
+}
 
 #endif // BITCOIN_CHAIN_H

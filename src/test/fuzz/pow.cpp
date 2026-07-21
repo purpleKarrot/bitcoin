@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <list>
 
 void initialize_pow()
 {
@@ -28,6 +29,7 @@ FUZZ_TARGET(pow, .init = initialize_pow)
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
     const Consensus::Params& consensus_params = Params().GetConsensus();
     std::vector<std::unique_ptr<CBlockIndex>> blocks;
+    std::list<uint256> block_hashes;
     const uint32_t fixed_time = fuzzed_data_provider.ConsumeIntegral<uint32_t>();
     const uint32_t fixed_bits = fuzzed_data_provider.ConsumeIntegral<uint32_t>();
     LIMITED_WHILE (fuzzed_data_provider.remaining_bytes() > 0, 10000) {
@@ -35,8 +37,8 @@ FUZZ_TARGET(pow, .init = initialize_pow)
         if (!block_header) {
             continue;
         }
-        CBlockIndex& current_block{
-            *blocks.emplace_back(std::make_unique<CBlockIndex>(*block_header))};
+        CBlockIndex& current_block{*blocks.emplace_back(std::make_unique<CBlockIndex>(*block_header))};
+        current_block.phashBlock = &block_hashes.emplace_back(block_header->GetHash());
         {
             CBlockIndex* previous_block = blocks.empty() ? nullptr : PickValue(fuzzed_data_provider, blocks).get();
             const int current_height = (previous_block != nullptr && previous_block->nHeight != std::numeric_limits<int>::max()) ? previous_block->nHeight + 1 : 0;
@@ -63,9 +65,9 @@ FUZZ_TARGET(pow, .init = initialize_pow)
         }
         {
             (void)GetBlockProof(current_block);
-            (void)CalculateNextWorkRequired(&current_block, fuzzed_data_provider.ConsumeIntegralInRange<int64_t>(0, std::numeric_limits<int64_t>::max()), consensus_params);
+            (void)CalculateNextWorkRequired(AsChainView(&current_block), fuzzed_data_provider.ConsumeIntegralInRange<int64_t>(0, std::numeric_limits<int64_t>::max()), consensus_params);
             if (current_block.nHeight != std::numeric_limits<int>::max() && current_block.nHeight - (consensus_params.DifficultyAdjustmentInterval() - 1) >= 0) {
-                (void)GetNextWorkRequired(&current_block, &(*block_header), consensus_params);
+                (void)GetNextWorkRequired(AsChainView(&current_block), &(*block_header), consensus_params);
             }
         }
         {
@@ -92,6 +94,7 @@ FUZZ_TARGET(pow_transition, .init = initialize_pow)
     FuzzedDataProvider fuzzed_data_provider(buffer.data(), buffer.size());
     const Consensus::Params& consensus_params{Params().GetConsensus()};
     std::vector<std::unique_ptr<CBlockIndex>> blocks;
+    std::list<uint256> block_hashes;
 
     const uint32_t old_time{fuzzed_data_provider.ConsumeIntegral<uint32_t>()};
     const uint32_t new_time{fuzzed_data_provider.ConsumeIntegral<uint32_t>()};
@@ -114,11 +117,12 @@ FUZZ_TARGET(pow_transition, .init = initialize_pow)
             header.nTime = new_time;
         }
         auto current_block{std::make_unique<CBlockIndex>(header)};
+        current_block->phashBlock = &block_hashes.emplace_back(header.GetHash());
         current_block->pprev = blocks.empty() ? nullptr : blocks.back().get();
         current_block->nHeight = height;
         blocks.emplace_back(std::move(current_block));
     }
     auto last_block{blocks.back().get()};
-    unsigned int new_nbits{GetNextWorkRequired(last_block, nullptr, consensus_params)};
+    unsigned int new_nbits{GetNextWorkRequired(AsChainView(last_block), nullptr, consensus_params)};
     Assert(PermittedDifficultyTransition(consensus_params, last_block->nHeight + 1, last_block->nBits, new_nbits));
 }
