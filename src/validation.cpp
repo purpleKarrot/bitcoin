@@ -2413,6 +2413,20 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
              Ticks<SecondsDouble>(m_chainman.time_check),
              Ticks<MillisecondsDouble>(m_chainman.time_check) / m_chainman.num_blocks_total);
 
+    CBlockUndo blockundo;
+
+    if (! [
+        &state,      // output
+        &block,      // primary input
+        pindex,      // replace with abstraction ChainView
+        &view,       // replace with abstraction CoinIndex
+        &params,     // input
+        &blockundo,
+        fJustCheck,
+        fScriptChecks,
+        &m_chainman = m_chainman
+    ] () EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
+
     // Do not allow blocks that contain transactions which 'overwrite' older transactions,
     // unless those are already completely spent.
     // If such overwrites are allowed, coinbases and transactions depending upon those
@@ -2507,8 +2521,6 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
 
     // Get the script flags for this block
     script_verify_flags flags{GetBlockScriptFlags(*pindex, m_chainman)};
-
-    CBlockUndo blockundo;
 
     // Precomputed transaction data pointers must not be invalidated
     // until after `control` has run the script checks (potentially
@@ -2611,6 +2623,9 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
             state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, strprintf("block-script-verify-flag-failed (%s)", ScriptErrorString(parallel_result->first)), parallel_result->second);
         }
     }
+
+    return true; } ()) return false;
+
     if (!state.IsValid()) {
         LogInfo("Block validation error: %s", state.ToString());
         return false;
