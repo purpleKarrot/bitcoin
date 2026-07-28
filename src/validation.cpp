@@ -2393,6 +2393,18 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
             script_check_reason = nullptr;
         }
     }
+    const bool fScriptChecks{!!script_check_reason};
+    const kernel::ChainstateRole role{GetRole()};
+    if (script_check_reason != m_last_script_check_reason_logged && role.validated && !role.historical) {
+        if (fScriptChecks) {
+            LogInfo("Enabling script verification at block #%d (%s): %s.",
+                    pindex->nHeight, block_hash.ToString(), script_check_reason);
+        } else {
+            LogInfo("Disabling script verification at block #%d (%s).",
+                    pindex->nHeight, block_hash.ToString());
+        }
+        m_last_script_check_reason_logged = script_check_reason;
+    }
 
     const auto time_1{SteadyClock::now()};
     m_chainman.time_check += time_1 - time_start;
@@ -2495,19 +2507,6 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
 
     // Get the script flags for this block
     script_verify_flags flags{GetBlockScriptFlags(*pindex, m_chainman)};
-
-    const bool fScriptChecks{!!script_check_reason};
-    const kernel::ChainstateRole role{GetRole()};
-    if (script_check_reason != m_last_script_check_reason_logged && role.validated && !role.historical) {
-        if (fScriptChecks) {
-            LogInfo("Enabling script verification at block #%d (%s): %s.",
-                    pindex->nHeight, block_hash.ToString(), script_check_reason);
-        } else {
-            LogInfo("Disabling script verification at block #%d (%s).",
-                    pindex->nHeight, block_hash.ToString());
-        }
-        m_last_script_check_reason_logged = script_check_reason;
-    }
 
     CBlockUndo blockundo;
 
