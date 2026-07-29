@@ -118,14 +118,6 @@ constexpr static struct {
               {600, 88096214},   {0, 137477892},    {1200, 195514506}, {300, 704114595},  {900, 292087369},  {1400, 758684870},
               {1300, 163493028}, {1200, 53151293}};
 
-static std::unique_ptr<CBlockIndex> CreateBlockIndex(int nHeight, CBlockIndex* active_chain_tip) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
-{
-    auto index{std::make_unique<CBlockIndex>()};
-    index->nHeight = nHeight;
-    index->pprev = active_chain_tip;
-    return index;
-}
-
 // Test suite for ancestor feerate transaction selection.
 // Implemented as an additional function, rather than a separate test case,
 // to allow reusing the blockchain created in CreateNewBlock_validity.
@@ -614,7 +606,7 @@ void MinerTestingSetup::TestBasicMining(const CScript& scriptPubKey, const std::
 
     {
         CBlockIndex* active_chain_tip = m_node.chainman->ActiveChain().Tip();
-        BOOST_CHECK(SequenceLocks(CTransaction(tx), flags, prevheights, *CreateBlockIndex(active_chain_tip->nHeight + 2, active_chain_tip))); // Sequence locks pass on 2nd block
+        BOOST_CHECK(SequenceLocks(CTransaction(tx), flags, prevheights, AsChainView(active_chain_tip))); // Sequence locks pass on 2nd block
     }
 
     // relative time locked
@@ -631,7 +623,7 @@ void MinerTestingSetup::TestBasicMining(const CScript& scriptPubKey, const std::
         m_node.chainman->ActiveChain().Tip()->GetAncestor(m_node.chainman->ActiveChain().Tip()->nHeight - i)->nTime += SEQUENCE_LOCK_TIME; // Trick the MedianTimePast
     {
         CBlockIndex* active_chain_tip = m_node.chainman->ActiveChain().Tip();
-        BOOST_CHECK(SequenceLocks(CTransaction(tx), flags, prevheights, *CreateBlockIndex(active_chain_tip->nHeight + 1, active_chain_tip)));
+        BOOST_CHECK(SequenceLocks(CTransaction(tx), flags, prevheights, AsChainView(active_chain_tip)));
     }
 
     for (int i = 0; i < CBlockIndex::nMedianTimeSpan; ++i) {

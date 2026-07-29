@@ -217,14 +217,8 @@ std::optional<LockPoints> CalculateLockPointsAtTip(
     auto prev_heights{CalculatePrevHeights(*tip, coins_view, tx)};
     if (!prev_heights.has_value()) return std::nullopt;
 
-    CBlockIndex next_tip;
-    next_tip.pprev = tip;
-    // When SequenceLocks() is called within ConnectBlock(), the height
-    // of the block *being* evaluated is what is used.
-    // Thus if we want to know if a transaction can be part of the
-    // *next* block, we need to use one more than active_chainstate.m_chain.Height()
-    next_tip.nHeight = tip->nHeight + 1;
-    const auto [min_height, min_time] = CalculateSequenceLocks(tx, STANDARD_LOCKTIME_VERIFY_FLAGS, prev_heights.value(), next_tip);
+    auto chain = AsChainView(tip);
+    const auto [min_height, min_time] = CalculateSequenceLocks(tx, STANDARD_LOCKTIME_VERIFY_FLAGS, prev_heights.value(), chain);
 
     // Also store the hash of the block with the highest height of
     // all the blocks which have sequence locked prevouts.
@@ -239,7 +233,7 @@ std::optional<LockPoints> CalculateLockPointsAtTip(
     int max_input_height{0};
     for (const int height : prev_heights.value()) {
         // Can ignore mempool inputs since we'll fail if they had non-zero locks
-        if (height != next_tip.nHeight) {
+        if (height != static_cast<int>(chain.size())) {
             max_input_height = std::max(max_input_height, height);
         }
     }
@@ -256,18 +250,7 @@ bool CheckSequenceLocksAtTip(CBlockIndex* tip,
                              const LockPoints& lock_points)
 {
     assert(tip != nullptr);
-
-    CBlockIndex index;
-    index.pprev = tip;
-    // CheckSequenceLocksAtTip() uses active_chainstate.m_chain.Height()+1 to evaluate
-    // height based locks because when SequenceLocks() is called within
-    // ConnectBlock(), the height of the block *being*
-    // evaluated is what is used.
-    // Thus if we want to know if a transaction can be part of the
-    // *next* block, we need to use one more than active_chainstate.m_chain.Height()
-    index.nHeight = tip->nHeight + 1;
-
-    return EvaluateSequenceLocks(index, {lock_points.height, lock_points.time});
+    return EvaluateSequenceLocks(AsChainView(tip), {lock_points.height, lock_points.time});
 }
 
 static void LimitMempoolSize(CTxMemPool& pool, CCoinsViewCache& coins_cache)
@@ -2259,10 +2242,8 @@ DisconnectResult Chainstate::DisconnectBlock(const CBlock& block, const CBlockIn
     return fClean ? DISCONNECT_OK : DISCONNECT_UNCLEAN;
 }
 
-script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const ChainstateManager& chainman)
+script_verify_flags GetBlockScriptFlags(const uint256& block_hash, int block_height, const Consensus::Params& consensusparams)
 {
-    const Consensus::Params& consensusparams = chainman.GetConsensus();
-
     // BIP16 didn't become active until Apr 1 2012 (on mainnet, and
     // retroactively applied to testnet)
     // However, only one historical block violated the P2SH rules (on both
@@ -2272,32 +2253,37 @@ script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const Ch
     // For simplicity, always leave P2SH+WITNESS+TAPROOT on except for the two
     // violating blocks.
     script_verify_flags flags{SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS | SCRIPT_VERIFY_TAPROOT};
-    const auto it{consensusparams.script_flag_exceptions.find(*Assert(block_index.phashBlock))};
+    const auto it{consensusparams.script_flag_exceptions.find(block_hash)};
     if (it != consensusparams.script_flag_exceptions.end()) {
         flags = it->second;
     }
 
     // Enforce the DERSIG (BIP66) rule
-    if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_DERSIG)) {
+    if (block_height >= consensusparams.DeploymentHeight(Consensus::DEPLOYMENT_DERSIG)) {
         flags |= SCRIPT_VERIFY_DERSIG;
     }
 
     // Enforce CHECKLOCKTIMEVERIFY (BIP65)
-    if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_CLTV)) {
+    if (block_height >= consensusparams.DeploymentHeight(Consensus::DEPLOYMENT_CLTV)) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
     }
 
     // Enforce CHECKSEQUENCEVERIFY (BIP112)
-    if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_CSV)) {
+    if (block_height >= consensusparams.DeploymentHeight(Consensus::DEPLOYMENT_CSV)) {
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
     }
 
     // Enforce BIP147 NULLDUMMY (activated simultaneously with segwit)
-    if (DeploymentActiveAt(block_index, chainman, Consensus::DEPLOYMENT_SEGWIT)) {
+    if (block_height >= consensusparams.DeploymentHeight(Consensus::DEPLOYMENT_SEGWIT)) {
         flags |= SCRIPT_VERIFY_NULLDUMMY;
     }
 
     return flags;
+}
+
+script_verify_flags GetBlockScriptFlags(const CBlockIndex& block_index, const ChainstateManager& chainman)
+{
+    return GetBlockScriptFlags(*Assert(block_index.phashBlock), block_index.nHeight, chainman.GetConsensus());
 }
 
 
@@ -2413,12 +2399,14 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
              Ticks<SecondsDouble>(m_chainman.time_check),
              Ticks<MillisecondsDouble>(m_chainman.time_check) / m_chainman.num_blocks_total);
 
+    assert(pindex->pprev);
+    AnyChainView chain = AsChainView(pindex->pprev);
     CBlockUndo blockundo;
 
     if (! [
         &state,      // output
         &block,      // primary input
-        pindex,      // replace with abstraction ChainView
+        &chain,
         &view,       // replace with abstraction CoinIndex
         &params,     // input
         &blockundo,
@@ -2437,7 +2425,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     // Now that the whole chain is irreversibly beyond that time it is applied to all blocks except the
     // two in the chain that violate it. This prevents exploiting the issue against nodes during their
     // initial block download.
-    bool fEnforceBIP30 = !IsBIP30Repeat(*pindex);
+    bool fEnforceBIP30 = !IsBIP30Repeat(block.GetHash(), chain.size());
 
     // Once BIP34 activated it was not possible to create new duplicate coinbases and thus other than starting
     // with the 2 existing duplicate coinbase pairs, not possible to create overwriting txs.  But by the
@@ -2494,15 +2482,13 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     // testnet3 has no blocks before the BIP34 height with indicated heights
     // post BIP34 before approximately height 486,000,000. After block
     // 1,983,702 testnet3 starts doing unnecessary BIP30 checking again.
-    assert(pindex->pprev);
-    CBlockIndex* pindexBIP34height = pindex->pprev->GetAncestor(params.BIP34Height);
     //Only continue to enforce if we're below BIP34 activation height or the block hash at that height doesn't correspond.
-    fEnforceBIP30 = fEnforceBIP30 && (!pindexBIP34height || !(pindexBIP34height->GetBlockHash() == params.BIP34Hash));
+    fEnforceBIP30 = fEnforceBIP30 && chain[params.BIP34Height].GetHash() != params.BIP34Hash;
 
     // TODO: Remove BIP30 checking from block height 1,983,702 on, once we have a
     // consensus change that ensures coinbases at those heights cannot
     // duplicate earlier coinbases.
-    if (fEnforceBIP30 || pindex->nHeight >= BIP34_IMPLIES_BIP30_LIMIT) {
+    if (fEnforceBIP30 || chain.size() >= BIP34_IMPLIES_BIP30_LIMIT) {
         for (const auto& tx : block.vtx) {
             for (size_t o = 0; o < tx->vout.size(); o++) {
                 if (view.HaveCoin(COutPoint(tx->GetHash(), o))) {
@@ -2515,12 +2501,12 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
 
     // Enforce BIP68 (sequence locks)
     int nLockTimeFlags = 0;
-    if (DeploymentActiveAt(*pindex, m_chainman, Consensus::DEPLOYMENT_CSV)) {
+    if (static_cast<int>(chain.size()) >= params.DeploymentHeight(Consensus::DEPLOYMENT_CSV)) {
         nLockTimeFlags |= LOCKTIME_VERIFY_SEQUENCE;
     }
 
     // Get the script flags for this block
-    script_verify_flags flags{GetBlockScriptFlags(*pindex, m_chainman)};
+    script_verify_flags flags{GetBlockScriptFlags(block.GetHash(), chain.size(), params)};
 
     // Precomputed transaction data pointers must not be invalidated
     // until after `control` has run the script checks (potentially
@@ -2544,7 +2530,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         {
             CAmount txfee = 0;
             TxValidationState tx_state;
-            if (!Consensus::CheckTxInputs(tx, tx_state, view, pindex->nHeight, txfee)) {
+            if (!Consensus::CheckTxInputs(tx, tx_state, view, chain.size(), txfee)) {
                 // Any transaction validation failure in ConnectBlock is a block consensus failure
                 state.Invalid(BlockValidationResult::BLOCK_CONSENSUS,
                               tx_state.GetRejectReason(),
@@ -2566,7 +2552,7 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
                 prevheights[j] = view.AccessCoin(tx.vin[j].prevout).nHeight;
             }
 
-            if (!SequenceLocks(tx, nLockTimeFlags, prevheights, *pindex)) {
+            if (!SequenceLocks(tx, nLockTimeFlags, prevheights, chain)) {
                 state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-txns-nonfinal",
                               "contains a non-BIP68-final transaction " + tx.GetHash().ToString());
                 break;
@@ -2609,10 +2595,10 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         if (i > 0) {
             blockundo.vtxundo.emplace_back();
         }
-        UpdateCoins(tx, view, i == 0 ? undoDummy : blockundo.vtxundo.back(), pindex->nHeight);
+        UpdateCoins(tx, view, i == 0 ? undoDummy : blockundo.vtxundo.back(), chain.size());
     }
 
-    CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, params);
+    CAmount blockReward = nFees + GetBlockSubsidy(chain.size(), params);
     if (block.vtx[0]->GetValueOut() > blockReward && state.IsValid()) {
         state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount",
                       strprintf("coinbase pays too much (actual=%d vs limit=%d)", block.vtx[0]->GetValueOut(), blockReward));
@@ -6211,10 +6197,15 @@ Chainstate& ChainstateManager::AddChainstate(std::unique_ptr<Chainstate> chainst
     return curr_chainstate;
 }
 
+bool IsBIP30Repeat(const uint256& block_hash, int block_height)
+{
+    return (block_height==91842 && block_hash == uint256{"00000000000a4d0a398161ffc163c503763b1f4360639393e0e4c8e300e0caec"}) ||
+           (block_height==91880 && block_hash == uint256{"00000000000743f190a18c5577a3c2d2a1f610ae9601ac046a38084ccb7cd721"});
+}
+
 bool IsBIP30Repeat(const CBlockIndex& block_index)
 {
-    return (block_index.nHeight==91842 && block_index.GetBlockHash() == uint256{"00000000000a4d0a398161ffc163c503763b1f4360639393e0e4c8e300e0caec"}) ||
-           (block_index.nHeight==91880 && block_index.GetBlockHash() == uint256{"00000000000743f190a18c5577a3c2d2a1f610ae9601ac046a38084ccb7cd721"});
+    return IsBIP30Repeat(block_index.GetBlockHash(), block_index.nHeight);
 }
 
 bool IsBIP30Unspendable(const uint256& block_hash, int block_height)

@@ -36,7 +36,7 @@ bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime)
     return true;
 }
 
-std::pair<int, int64_t> CalculateSequenceLocks(const CTransaction &tx, int flags, std::vector<int>& prevHeights, const CBlockIndex& block)
+std::pair<int, int64_t> CalculateSequenceLocks(const CTransaction &tx, int flags, std::vector<int>& prevHeights, AnyChainView chain)
 {
     assert(prevHeights.size() == tx.vin.size());
 
@@ -71,7 +71,8 @@ std::pair<int, int64_t> CalculateSequenceLocks(const CTransaction &tx, int flags
         int nCoinHeight = prevHeights[txinIndex];
 
         if (txin.nSequence & CTxIn::SEQUENCE_LOCKTIME_TYPE_FLAG) {
-            const int64_t nCoinTime{Assert(block.GetAncestor(std::max(nCoinHeight - 1, 0)))->GetMedianTimePast()};
+            int h = std::max(nCoinHeight - 1, 0);
+            const int64_t nCoinTime{MedianTimePast(chain | std::views::take(h))};
             // NOTE: Subtract 1 to maintain nLockTime semantics
             // BIP 68 relative lock times have the semantics of calculating
             // the first block or time at which the transaction would be
@@ -94,19 +95,18 @@ std::pair<int, int64_t> CalculateSequenceLocks(const CTransaction &tx, int flags
     return std::make_pair(nMinHeight, nMinTime);
 }
 
-bool EvaluateSequenceLocks(const CBlockIndex& block, std::pair<int, int64_t> lockPair)
+bool EvaluateSequenceLocks(AnyChainView chain, std::pair<int, int64_t> lockPair)
 {
-    assert(block.pprev);
-    int64_t nBlockTime = block.pprev->GetMedianTimePast();
-    if (lockPair.first >= block.nHeight || lockPair.second >= nBlockTime)
+    int64_t nBlockTime = MedianTimePast(chain);
+    if (lockPair.first >= static_cast<int>(chain.size()) || lockPair.second >= nBlockTime)
         return false;
 
     return true;
 }
 
-bool SequenceLocks(const CTransaction &tx, int flags, std::vector<int>& prevHeights, const CBlockIndex& block)
+bool SequenceLocks(const CTransaction &tx, int flags, std::vector<int>& prevHeights, AnyChainView chain)
 {
-    return EvaluateSequenceLocks(block, CalculateSequenceLocks(tx, flags, prevHeights, block));
+    return EvaluateSequenceLocks(chain, CalculateSequenceLocks(tx, flags, prevHeights, chain));
 }
 
 unsigned int GetLegacySigOpCount(const CTransaction& tx)
