@@ -989,8 +989,6 @@ private:
     //! Timers and counters used for benchmarking validation in both background
     //! and active chainstates.
     SteadyClock::duration GUARDED_BY(::cs_main) time_check{};
-    SteadyClock::duration GUARDED_BY(::cs_main) time_forks{};
-    SteadyClock::duration GUARDED_BY(::cs_main) time_connect{};
     SteadyClock::duration GUARDED_BY(::cs_main) time_verify{};
     SteadyClock::duration GUARDED_BY(::cs_main) time_undo{};
     SteadyClock::duration GUARDED_BY(::cs_main) time_index{};
