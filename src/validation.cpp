@@ -2521,15 +2521,12 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
 
     std::vector<int> prevheights;
     CAmount nFees = 0;
-    int nInputs = 0;
     int64_t nSigOpsCost = 0;
     blockundo.vtxundo.reserve(block.vtx.size() - 1);
     for (unsigned int i = 0; i < block.vtx.size(); i++)
     {
         if (!state.IsValid()) break;
         const CTransaction &tx = *(block.vtx[i]);
-
-        nInputs += tx.vin.size();
 
         if (!tx.IsCoinBase())
         {
@@ -2618,6 +2615,10 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
         LogInfo("Block validation error: %s", state.ToString());
         return false;
     }
+
+    const int nInputs = std::accumulate(block.vtx.begin(), block.vtx.end(), 0,
+        [](int n, const CTransactionRef& tx) { return n + tx->vin.size(); });
+
     const auto time_4{SteadyClock::now()};
     m_chainman.time_verify += time_4 - time_1;
     LogDebug(BCLog::BENCH, "    - Verify %u txins: %.2fms (%.3fms/txin) [%.2fs (%.2fms/blk)]\n", nInputs - 1,
